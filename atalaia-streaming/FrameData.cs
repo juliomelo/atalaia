@@ -5,7 +5,7 @@ using System.Text;
 
 namespace atalaia.streaming.movementDetection
 {
-    struct FrameData
+    public struct FrameData
     {
         public FrameData(Mat frame)
         {

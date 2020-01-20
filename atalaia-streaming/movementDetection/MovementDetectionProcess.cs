@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using System.Linq;
 
 namespace atalaia.streaming.movementDetection
 {
@@ -12,8 +13,7 @@ namespace atalaia.streaming.movementDetection
         private uint id;
         private BlockingCollection<FrameData> buffer = new BlockingCollection<FrameData>(30 * 10);
         private Thread thread;
-        private List<ProcessedFrame> pastFrames = new List<ProcessedFrame>(30 * 5);
-        private BlurDiffMovementDetector movementDetector = new BlurDiffMovementDetector();
+        private BufferedBlurDiffMovementDetector movementDetector = new BufferedBlurDiffMovementDetector();
         public double MaxAreaDiscarded { get; private set; }
 
         public delegate void DetectedMovementHandler(MovementRecord record);
@@ -43,31 +43,16 @@ namespace atalaia.streaming.movementDetection
             do
             {
                 var frameData = buffer.Take();
-                var analysis = movementDetector.DetectMovement(frameData.Frame);
+                var result = movementDetector.DetectMovement(frameData);
 
-                if (analysis.DetectedMovement)
+                if (result.Length > 0)
                 {
-                    pastFrames.Add(new ProcessedFrame() {
-                        FrameData = frameData,
-                        Movements = analysis.Movements
-                    });
-
-                    if (pastFrames.Count > 1 && (frameData.Ts - pastFrames[0].FrameData.Ts).TotalSeconds >= 1.5)
-                    {
-                        record();
-                    } 
-                }
-                else
-                {
-                    frameData.Frame.Dispose();
-                    pastFrames.ForEach(p => p.FrameData.Frame.Dispose());
-                    pastFrames.Clear();
-                    MaxAreaDiscarded = Math.Max(MaxAreaDiscarded, analysis.MaxAreaDiff);
+                    record(result);
                 }
             } while (true);
         }
 
-        private void record()
+        private void record(DetectedMovementWithFrame[] pastFrames)
         {
             var begin = pastFrames[0].FrameData.Ts;
             MovementRecord record;
@@ -77,79 +62,50 @@ namespace atalaia.streaming.movementDetection
                 bool shouldRecord = true;
                 record = recorder.RecordData;
 
-                foreach (ProcessedFrame pastFrame in pastFrames)
+                foreach (DetectedMovementWithFrame pastFrame in pastFrames)
                 {
-                    recorder.Record(pastFrame.FrameData, pastFrame.Movements);
+                    recorder.Record(pastFrame.FrameData, pastFrame.Analysis.Movements);
                     pastFrame.FrameData.Frame.Dispose();
                 }
 
-                pastFrames.Clear();
-
                 DateTime? quietSince = null;
-                DateTime? restartedAt = null;
 
                 do
                 {
                     var frameData = buffer.Take();
-                    var analysis = movementDetector.DetectMovement(frameData.Frame);
+                    var analysis = movementDetector.DetectMovement(frameData);
                     
-                    if (!analysis.DetectedMovement)
+                    if (analysis.Length == 0)
                     {
                         if (!quietSince.HasValue)
                         {
                             quietSince = frameData.Ts;
-                            Console.WriteLine($"[{id}] Quiet...");
+                            Console.WriteLine($"[{id}] {DateTime.Now} -- Pause...");
                         }
                         else if ((frameData.Ts - quietSince.Value).TotalSeconds >= 5)
                         {
                             shouldRecord = false;
                         }
-
-                        pastFrames.Add(new ProcessedFrame()
-                        {
-                            FrameData = frameData,
-                            Movements = analysis.Movements
-                        });
                     }
                     else
                     {
-                        if (quietSince.HasValue && !restartedAt.HasValue)
-                        {
-                            Console.WriteLine($"[{id}] Resume?");
-                            restartedAt = DateTime.Now;
-                        }
-                        else if (quietSince.HasValue && restartedAt.HasValue && (frameData.Ts - restartedAt.Value).TotalSeconds >= 1)
-                        {
-                            Console.WriteLine($"[{id}] Resume!");
+                        Console.WriteLine($"[{id}] {DateTime.Now} --  Resume!");
 
-                            foreach (ProcessedFrame pastFrame in pastFrames)
-                            {
-                                recorder.Record(pastFrame.FrameData, pastFrame.Movements);
-                                pastFrame.FrameData.Frame.Dispose();
-                            }
-
-                            pastFrames.Clear();
-                            restartedAt = null;
-                            quietSince = null;
+                        foreach (DetectedMovementWithFrame pastFrame in analysis)
+                        {
+                            recorder.Record(pastFrame.FrameData, pastFrame.Analysis.Movements);
+                            pastFrame.FrameData.Frame.Dispose();
                         }
 
-                        if (!restartedAt.HasValue)
-                        {
-                            recorder.Record(frameData, analysis.Movements);
-                            frameData.Frame.Dispose();
-
-                            if ((frameData.Ts - begin).TotalSeconds >= 30)
-                            {
-                                shouldRecord = false;
-                            }
-                        }
+                        quietSince = null;
                     }
+
+                    if ((frameData.Ts - begin).TotalSeconds >= 30)
+                        shouldRecord = false;
+
                 } while (shouldRecord);
 
-                Console.WriteLine($"[{id}] Stopped.");
-
-                pastFrames.ForEach(p => p.FrameData.Frame.Dispose());
-                pastFrames.Clear();
+                Console.WriteLine($"[{id}] {DateTime.Now} --  Stopped.");
             }
 
             this.MovementEvent?.Invoke(record);
@@ -159,7 +115,6 @@ namespace atalaia.streaming.movementDetection
         {
             this.thread.Abort();
             buffer.Dispose();
-            pastFrames.Clear();
         }
     }
 }

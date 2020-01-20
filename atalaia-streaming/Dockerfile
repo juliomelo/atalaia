@@ -62,6 +62,9 @@ ADD https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names /d
 RUN mkdir /data/local
 WORKDIR /app
 
+# For debug
+RUN apt install libgtk2.0-dev 
+
 FROM mcr.microsoft.com/dotnet/core/sdk:3.1-buster AS build
 WORKDIR /src
 COPY ["atalaia-streaming/atalaia-streaming.csproj", "atalaia-streaming/"]

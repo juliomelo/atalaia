@@ -39,34 +39,55 @@ namespace atalaia.streaming.objectDetection
             HashSet<string> classesOfInterest = new HashSet<string>();
             classesOfInterest.Add("person");
             classesOfInterest.Add("car");
-
+            classesOfInterest.Add("motorbike");
+            classesOfInterest.Add("bicycle");
+            classesOfInterest.Add("bus");
+            classesOfInterest.Add("truck");
+            classesOfInterest.Add("boat");
+            classesOfInterest.Add("handbag");
+            classesOfInterest.Add("umbrella");
+            classesOfInterest.Add("suitcase");
+ 
             while (true)
             {
                 var record = queue.Take();
                 bool interested = false;
 
+                Console.WriteLine($"Analysing  {record.VideoFilePath}");
+
+                RecordedFrameMetadata[] frames = (RecordedFrameMetadata[])JsonSerializer.Deserialize(File.ReadAllText(record.MetadataFilePath), typeof(RecordedFrameMetadata[]));
+                DateTime? last = null;
+
                 using (var cap = new VideoCapture(record.VideoFilePath))
                 {
                     int i = 0;
                     var mat = cap.RetrieveMat();
+                    int interval = 0;
 
                     while (!mat.Empty() && !interested)
                     {
-                        var objects = objectDetector.ClassifyImg(mat);
-
-                        foreach (DetectedObject obj in objects)
+                        if (!last.HasValue || (frames[i].Ts - last.Value).Milliseconds >= interval)
                         {
-                            mat.DrawMarker(new Point(obj.Left + obj.Width / 2, obj.Top + obj.Height / 2), Scalar.Red, MarkerTypes.Cross, 20, 2);
-                            mat.PutText($"{obj.Name}: {obj.Confidence}", new Point(obj.Left, obj.Top + obj.Height), HersheyFonts.HersheySimplex, 0.5, Scalar.Red);
+                            last = frames[i].Ts;
+                            var objects = objectDetector.ClassifyImg(mat);
+
+                            foreach (DetectedObject obj in objects)
+                            {
+                                mat.DrawMarker(new Point(obj.Left + obj.Width / 2, obj.Top + obj.Height / 2), Scalar.Red, MarkerTypes.Cross, 20, 2);
+                                mat.PutText($"{obj.Name}: {obj.Confidence}", new Point(obj.Left, obj.Top + obj.Height), HersheyFonts.HersheySimplex, 0.5, Scalar.Red);
+                            }
+
+                            if (objects.Any(obj => classesOfInterest.Contains(obj.Name)))
+                            {
+                                interested = true;
+                                Console.WriteLine($"Found {string.Join(", ", objects.Select(obj => obj.Name).ToArray())} objects on {record.VideoFilePath} at {frames[i].Ts}");
+                                this.DetectedObjectEvent?.Invoke(record, objects, frames[i], mat);
+                            }
+
+                            interval = Math.Min(150, interval + 30);
                         }
 
-                        if (objects.Any(obj => classesOfInterest.Contains(obj.Name)))
-                        {
-                            interested = true;
-                            RecordedFrameMetadata[] frames = (RecordedFrameMetadata[])JsonSerializer.Deserialize(File.ReadAllText(record.MetadataFilePath), typeof(RecordedFrameMetadata[]));
-                            Console.WriteLine($"Found {string.Join(", ", objects.Select(obj => obj.Name).ToArray())} objects on {record.VideoFilePath} at {frames[i].Ts}");
-                            this.DetectedObjectEvent?.Invoke(record, objects, frames[i], mat);
-                        }
+                        System.GC.Collect();
 
                         i++;
                         cap.Read(mat);
