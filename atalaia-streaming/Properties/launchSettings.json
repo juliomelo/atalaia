@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "atalaia-streaming": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker",
+      "commandLineArgs": "",
+      "environmentVariables": {
+        "DISPLAY": "",
+        "TELEGRAM_CHAT_ID": "",
+        "TELEGRAM_TOKEN": ""
+      }
+    }
+  }
+}
