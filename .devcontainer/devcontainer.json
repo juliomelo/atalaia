@@ -1,0 +1,7 @@
+{
+    "dockerFile": "Dockerfile",
+    "name": "atalaia-streaming-develop",
+    "extensions": [
+        "ms-vscode.csharp"
+    ]
+}
