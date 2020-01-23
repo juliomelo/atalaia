@@ -34,7 +34,7 @@ namespace atalaia.streaming.movementDetection
                 {
                     var andDiff = diffRef.ExecuteOperations(true,
                         (i, o) => Cv2.BitwiseAnd(i, diff, o),
-                        (i, o) => Cv2.Dilate(i, o, new Mat(), null, 2),
+                        (i, o) => Cv2.Dilate(i, o, new Mat(), null, 4),
                         (i, o) => Cv2.Erode(i, o, new Mat(), null, 2));
 
                     //Cv2.ImShow("img", frameData.Frame);

@@ -15,6 +15,7 @@ namespace atalaia.streaming
         private MovementDetectionProcess movementDetectionProcess;
         private static ObjectDetectionProcess objectDetectionProcess;
 
+        private string videoUrl;
         private VideoCapture cap;
         private volatile uint frames = 0;
         private volatile uint discarded = 0;
@@ -32,6 +33,8 @@ namespace atalaia.streaming
                 objectDetectionProcess = new ObjectDetectionProcess();
                 objectDetectionProcess.DetectedObjectEvent += notifyObject;
             }
+
+            this.videoUrl = videoUrl;
 
             // rtsp://${options.user}:${options.pass}@${options.host}:${options.rtspPort || 554}/cam/realmonitor?channel=${channel}&subtype=1
             cap = new VideoCapture(videoUrl);
@@ -56,16 +59,25 @@ namespace atalaia.streaming
             {
                 Mat mat = cap.RetrieveMat();
 
+                frames++;
+
                 if (!mat.Empty())
                 {
                     if (!movementDetectionProcess.Enqueue(mat))
                     {
                         this.discarded++;
-                        mat.Dispose();
+
+                        if (this.discarded > 15)
+                        {
+                            Console.WriteLine($"[{id}] Overload! Reconnecting in 5 seconds...");
+                            mat.Dispose();
+                            cap.Dispose();
+                            Thread.Sleep(TimeSpan.FromSeconds(5));
+                            cap = new VideoCapture(videoUrl);
+                            Console.WriteLine($"[{id}] Reconnected!");
+                        }
                     }
                 }
-
-                frames++;
             }
         }
 

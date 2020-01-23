@@ -16,10 +16,21 @@ namespace atalaia.streaming
         {
             Console.WriteLine("Atalaia {0}", Assembly.GetExecutingAssembly().GetName().Version);
 
-            foreach (string url in args)
+            if (args.Length > 0)
             {
-                Console.WriteLine(url);
-                new StreamPipeline(url);
+                foreach (string url in args)
+                {
+                    Console.WriteLine(url);
+                    new StreamPipeline(url);
+                }
+            }
+            else
+            {
+                foreach (string url in Environment.GetEnvironmentVariable("ATALAIA_VIDEO_URL").Split(' '))
+                {
+                    Console.WriteLine(url);
+                    new StreamPipeline(url);
+                }
             }
         }
     }

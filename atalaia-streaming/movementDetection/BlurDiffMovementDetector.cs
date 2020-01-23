@@ -8,7 +8,7 @@ namespace atalaia.streaming.movementDetection
     public class BlurDiffMovementDetector
     {
         private Size blurSize = new Size(15, 15);
-        private int minArea = 10;
+        private int minArea = 12;
         private Mat lastFrame;
 
         public MovementAnalysis DetectMovement(Mat originalFrame, out Mat diff)

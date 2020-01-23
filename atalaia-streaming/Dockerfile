@@ -23,15 +23,15 @@ FROM mcr.microsoft.com/dotnet/core/runtime:3.1-buster-slim AS base
 RUN apt update && \
     apt install -y ffmpeg \
     libavcodec58 libavfilter7 libavformat58 libavresample4 libavutil56 libpostproc55 libswscale5 \
-    caffe-tools-cpu caffe-cpu ccache \
+    ccache \
     libdc1394-utils libv4l2rds0 liblapacke libatlas3-base libopenblas-base liblapack3 liblapacke \
     \
     git \
     cmake libavcodec-dev libavfilter-dev libavutil-dev \
     libpostproc-dev libswscale-dev libavcodec-dev libavformat-dev libswscale-dev libgstreamer-plugins-base1.0-dev \
-    libgstreamer1.0-dev libpng-dev libjpeg-dev libopenexr-dev libtiff-dev libwebp-dev libcaffe-cpu-dev  \
+    libgstreamer1.0-dev libpng-dev libjpeg-dev libopenexr-dev libtiff-dev libwebp-dev  \
     libdc1394-22-dev liblapack-dev libeigen3-dev libopenblas-dev libatlas-base-dev liblapacke-dev \
-    procps iproute2 net-tools cmake ffmpeg libavcodec58 libavfilter7 libavformat58 libavresample4 libavutil56 libavcodec-dev libavfilter-dev libavutil-dev libpostproc-dev libpostproc55 libswscale-dev libswscale5 libavcodec-dev libavformat-dev libswscale-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libpng-dev libjpeg-dev libopenexr-dev libtiff-dev libwebp-dev libcaffe-cpu-dev caffe-tools-cpu caffe-cpu ccache libdc1394-22-dev libdc1394-utils libv4l2rds0 liblapack-dev libeigen3-dev libopenblas-dev libatlas-base-dev liblapacke liblapacke-dev
+    procps iproute2 net-tools cmake ffmpeg libavcodec58 libavfilter7 libavformat58 libavresample4 libavutil56 libavcodec-dev libavfilter-dev libavutil-dev libpostproc-dev libpostproc55 libswscale-dev libswscale5 libavcodec-dev libavformat-dev libswscale-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libpng-dev libjpeg-dev libopenexr-dev libtiff-dev libwebp-dev ccache libdc1394-22-dev libdc1394-utils libv4l2rds0 liblapack-dev libeigen3-dev libopenblas-dev libatlas-base-dev liblapacke liblapacke-dev
 WORKDIR /usr/src
 RUN git clone --branch 4.2.0 https://github.com/opencv/opencv.git
 RUN git clone --branch 4.2.0 https://github.com/opencv/opencv_contrib.git
@@ -56,21 +56,19 @@ RUN cd opencvsharp/src && \
     make install
 RUN cd /usr/lib && ln -s libOpenCvSharpExtern.so libOpenCvSharpExtern
 
-ADD https://pjreddie.com/media/files/yolov3-tiny.weights /data/yolo/yolov3-tiny.weights
-ADD https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg /data/yolo/yolov3-tiny.cfg
-ADD https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names /data/yolo/coco.names
+RUN apt install -y wget
+RUN mkdir -p /data/yolo && wget -O /data/yolo/yolov3-tiny.weights https://pjreddie.com/media/files/yolov3-tiny.weights 
+RUN wget -O /data/yolo/yolov3-tiny.cfg https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg
+RUN wget -O /data/yolo/coco.names https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
 RUN mkdir /data/local
 WORKDIR /app
-
-# For debug
-RUN apt install libgtk2.0-dev 
 
 FROM mcr.microsoft.com/dotnet/core/sdk:3.1-buster AS build
 WORKDIR /src
 COPY ["atalaia-streaming/atalaia-streaming.csproj", "atalaia-streaming/"]
 RUN dotnet restore "atalaia-streaming/atalaia-streaming.csproj"
 COPY . .
-WORKDIR "/src/atalaia-streaming"
+WORKDIR /src/atalaia-streaming
 RUN dotnet build "atalaia-streaming.csproj" -c Release -o /app/build
 
 FROM build AS publish

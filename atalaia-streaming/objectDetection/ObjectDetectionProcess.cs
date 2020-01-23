@@ -38,12 +38,12 @@ namespace atalaia.streaming.objectDetection
         {
             HashSet<string> classesOfInterest = new HashSet<string>();
             classesOfInterest.Add("person");
-            classesOfInterest.Add("car");
-            classesOfInterest.Add("motorbike");
-            classesOfInterest.Add("bicycle");
-            classesOfInterest.Add("bus");
-            classesOfInterest.Add("truck");
-            classesOfInterest.Add("boat");
+            //classesOfInterest.Add("car");
+            //classesOfInterest.Add("motorbike");
+            //classesOfInterest.Add("bicycle");
+            //classesOfInterest.Add("bus");
+            //classesOfInterest.Add("truck");
+            //classesOfInterest.Add("boat");
             classesOfInterest.Add("handbag");
             classesOfInterest.Add("umbrella");
             classesOfInterest.Add("suitcase");
