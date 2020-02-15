@@ -1,0 +1,10 @@
+/.devcontainer
+.vscode
+CMakeFiles
+build
+CMakeCache.txt
+Dockerfile
+.dockerignore
+.git
+.gitignore
+.gitattributes

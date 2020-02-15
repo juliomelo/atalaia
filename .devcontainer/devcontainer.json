@@ -1,0 +1,7 @@
+{
+    "dockerFile": "Dockerfile",
+    "name": "atalaia-streaming-cpp",
+    "extensions": [
+        "ms-vscode.cpptools", "ms-vscode.cmake-tools"
+    ]
+}
