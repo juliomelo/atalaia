@@ -15,6 +15,24 @@ extern "C"
 
 #define BUFFER_SECONDS 15
 
+class CircularPacketArray
+{
+    public:
+        CircularPacketArray(AVRational frame_rate);
+        CircularPacketArray(int buffer_size);
+        ~CircularPacketArray();
+        void next();
+        AVPacket *current();
+        vector<AVPacket> getPacketsSince(int64_t pts);
+        int size();
+        bool full;
+
+    private:
+        int buffer_size;
+        AVPacket *packets;
+        int currentIndex;
+};
+
 class FrameQueueItem
 {
     public:
@@ -22,6 +40,16 @@ class FrameQueueItem
         AVPacket *packet;
         cv::Mat mat;
         DetectedMovements movements;
+        AVRational time_base;
+};
+
+enum VideoState
+{
+    WAITING,
+    PROCESSING,
+    RECORDING,
+    SHUTDOWN,
+    FAILURE
 };
 
 class VideoStream
@@ -29,13 +57,15 @@ class VideoStream
     public:
         VideoStream(BlockingQueue<FrameQueueItem *> *queue);
         ~VideoStream();
-        int start(char *url);
+        int start(std::string url);
+        vector<AVPacket> getPacketsSince(int64_t pts);
 
     private:
         std::thread *thread;
-        char *url;
-        int threadState;
+        std::string url;
+        VideoState threadState;
         BlockingQueue<FrameQueueItem *> *queue;
+        CircularPacketArray *packets;
 
         static void threadProcess(VideoStream *url);
 };

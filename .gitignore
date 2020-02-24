@@ -427,3 +427,4 @@ data/yolov3-tiny.weights
 .vscode/settings.json
 atalaia-streaming/.vscode/settings.json
 atalaia-streaming/CMakeCache.txt
+build/atalaia-streaming/CMakeFiles/atalaia-streaming.dir/CameraAtalaia.cpp.o

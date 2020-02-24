@@ -11,6 +11,8 @@
 #include "VideoStream.hpp"
 #include "util/BlockingQueue.hpp"
 #include "ObjectDetector.hpp"
+#include <set>
+#include "CameraAtalaia.hpp"
 
 extern "C"
 {
@@ -30,49 +32,21 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	YoloV3ObjectDetector objectDetector;
-
 	// Register everything
 	//av_log_set_level( AV_LOG_DEBUG );
 	av_register_all();
 	//	avcodec_register_all();
 	//avformat_network_init();
 
-	VideoStream *streams[argc - 1];
-	BlockingQueue<FrameQueueItem *> queue(30 * 5 * 10);
+	CameraAtalaia *streams[argc - 1];
 
 	for (int i = 0; i < argc - 1; i++)
 	{
-		streams[i] = new VideoStream(&queue);
-		streams[i]->start(argv[i + 1]);
+		streams[i] = new CameraAtalaia(argv[i + 1]);
 	}
 
-	for (;;)
-	{
-		FrameQueueItem *frame = queue.pop();
-
-		Mat segmented = frame->mat.clone();
-		Scalar color( 0, 0, 255 );
-
-		for (int i = 0; i < frame->movements.size(); i++)
-    		polylines(segmented, frame->movements[i].contour, true, Scalar(0, 0, 255));
-
-		imshow("movement", segmented);
-
-		DetectedObjects objects = objectDetector.classifyFromMovements(frame->mat, frame->movements);
-
-		if (!objects.empty())
-		{
-			for (int i = 0; i < objects.size(); i++) {
-				objectDetector.drawObject(frame->mat, objects[i]);
-			}
-
-			imshow("objects", frame->mat);
-			cv::waitKey((int)(1000.0 / 30));
-		}
-
-		delete frame;
-	}
+	int wait;
+	cin >> wait;
 
 	return (EXIT_SUCCESS);
 }

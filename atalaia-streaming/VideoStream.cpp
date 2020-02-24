@@ -10,52 +10,81 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 
-class CircularPacketArray
+CircularPacketArray::CircularPacketArray(AVRational frame_rate)
 {
-    private:
-        int buffer_size;
-        AVPacket *packets;
-        int currentIndex;
+    double fps = av_q2d(frame_rate);
 
-    public:
-        CircularPacketArray(AVRational frame_rate)
-        {
-            double fps = av_q2d(frame_rate);
+    if (isnan(fps))
+        fps = 30;
 
-            if (isnan(fps))
-                fps = 30;
+    this->buffer_size = (int)fps * BUFFER_SECONDS;
+    this->full = false;
 
-            this->buffer_size = (int)fps * BUFFER_SECONDS;
+    cout << "Buffer size: " << this->buffer_size << "\n";
 
-            cout << "Buffer size: " << this->buffer_size << "\n";
+    this->packets = new AVPacket[this->buffer_size];
+    this->currentIndex = 0;
 
-            this->packets = new AVPacket[this->buffer_size];
-            this->currentIndex = 0;
+    for (int i = 0; i < this->buffer_size; i++)
+        av_init_packet(&packets[i]);
 
-            for (int i = 0; i < this->buffer_size; i++)
-                av_init_packet(&packets[i]);
-        }
+}
 
-        ~CircularPacketArray()
-        {
-            for (int i = 0; i < this->buffer_size; i++)
-                av_free_packet(&this->packets[i]);
+CircularPacketArray::CircularPacketArray(int buffer_size)
+{
+    this->buffer_size = buffer_size;
+    this->full = false;
 
-            delete this->packets;
-        }
+    this->packets = new AVPacket[this->buffer_size];
+    this->currentIndex = 0;
 
-        void next()
-        {
-            currentIndex = (currentIndex + 1) % this->buffer_size;
-            av_free_packet(&this->packets[currentIndex]);
-            av_init_packet(&packets[currentIndex]);
-        }
+    for (int i = 0; i < this->buffer_size; i++)
+        av_init_packet(&packets[i]);
+}
 
-        AVPacket *current()
-        {
-            return &packets[currentIndex];
-        }
-};
+CircularPacketArray::~CircularPacketArray()
+{
+    for (int i = 0; i < this->buffer_size; i++)
+        av_packet_unref(&this->packets[i]);
+
+    delete this->packets;
+}
+
+void CircularPacketArray::next()
+{
+    currentIndex = (currentIndex + 1) % this->buffer_size;
+    av_packet_unref(&this->packets[currentIndex]);
+    av_init_packet(&packets[currentIndex]);
+}
+
+AVPacket *CircularPacketArray::current()
+{
+    return &packets[currentIndex];
+}
+
+vector<AVPacket> CircularPacketArray::getPacketsSince(int64_t pts)
+{
+    vector<AVPacket> packets;
+
+    for (int i = this->full ? (currentIndex + 1) % this->buffer_size : 0; i != currentIndex; i = (i + 1) % this->buffer_size)
+    {
+        AVPacket copy;
+        av_init_packet(&copy);
+        av_packet_ref(&copy, &this->packets[i]);
+
+        if (copy.pts >= pts)
+            packets.push_back(copy);
+        else
+            av_packet_unref(&copy);
+    }
+
+    return packets;
+}
+
+int CircularPacketArray::size()
+{
+    return this->buffer_size;
+}
 
 long long current_timestamp()
 {
@@ -70,9 +99,11 @@ VideoStream::VideoStream(BlockingQueue<FrameQueueItem *> *queue)
 {
     this->thread = NULL;
     this->queue = queue;
+    this->threadState = WAITING;
+    this->packets = NULL;
 }
 
-int VideoStream::start(char *url)
+int VideoStream::start(std::string url)
 {
     if (this->thread != NULL)
         return EXIT_FAILURE;
@@ -87,18 +118,18 @@ void VideoStream::threadProcess(VideoStream *data)
 {
     cout << "Connecting to " << data->url << "...\n";
 
-    data->threadState = 1;
+    data->threadState = PROCESSING;
     AVFormatContext *format_ctx = NULL;
 
-    if (avformat_open_input(&format_ctx, data->url, NULL, NULL) != 0)
+    if (avformat_open_input(&format_ctx, data->url.c_str(), NULL, NULL) != 0)
     {
-        data->threadState = EXIT_FAILURE;
+        data->threadState = FAILURE;
         return;
     }
 
     if (avformat_find_stream_info(format_ctx, NULL) < 0)
     {
-        data->threadState = EXIT_FAILURE;
+        data->threadState = FAILURE;
         return;
     }
 
@@ -108,7 +139,7 @@ void VideoStream::threadProcess(VideoStream *data)
 
     if (VideoStream_index < 0)
     {
-        data->threadState = EXIT_FAILURE;
+        data->threadState = FAILURE;
         return;
     }
 
@@ -116,7 +147,7 @@ void VideoStream::threadProcess(VideoStream *data)
 
     if (avcodec_open2(vstrm->codec, vcodec, nullptr) < 0)
     {
-        data->threadState = EXIT_FAILURE;
+        data->threadState = FAILURE;
         return;
     }
 
@@ -131,7 +162,10 @@ void VideoStream::threadProcess(VideoStream *data)
         << "frame:  " << vstrm->nb_frames << "\n"
         << std::flush;
 
-    CircularPacketArray packets(vstrm->codec->framerate);
+    if (data->packets)
+        delete data->packets;
+
+    data->packets = new CircularPacketArray(vstrm->codec->framerate);
 
     av_read_play(format_ctx); //play RTSP
 
@@ -146,7 +180,7 @@ void VideoStream::threadProcess(VideoStream *data)
     if (!swsctx)
     {
         std::cerr << "fail to sws_getCachedContext";
-        data->threadState = EXIT_FAILURE;
+        data->threadState = FAILURE;
         return;
     }
 
@@ -162,14 +196,16 @@ void VideoStream::threadProcess(VideoStream *data)
 
     MovementDetector movementDetector;
 
-    while (data->threadState == 1 && av_read_frame(format_ctx, packets.current()) >= 0)
+    while ((data->threadState == PROCESSING || data->threadState == RECORDING) && av_read_frame(format_ctx, data->packets->current()) >= 0)
     {
-        if (packets.current()->stream_index == VideoStream_index)
+        now = current_timestamp();
+
+        if (data->packets->current()->stream_index == VideoStream_index)
         {
             // packet is video
             int got_pic = 0;
 
-            avcodec_decode_video2(vstrm->codec, decframe, &got_pic, packets.current());
+            avcodec_decode_video2(vstrm->codec, decframe, &got_pic, data->packets->current());
 
             if (got_pic)
             {
@@ -180,12 +216,13 @@ void VideoStream::threadProcess(VideoStream *data)
                 {
                     DetectedMovements movements = movementDetector.detectMovement(img);
 
-                    if (!movements.empty())
+                    if (data->threadState == RECORDING || !movements.empty())
                     {
                         FrameQueueItem *item = new FrameQueueItem;
-                        item->packet = av_packet_clone(packets.current());
+                        item->packet = av_packet_clone(data->packets->current());
                         item->mat = img.clone();
                         item->movements = movements;
+                        item->time_base = vstrm->time_base;
 
                         if (!data->queue->try_push(item)) {
                             cout << "Can't push item to queue!\n";
@@ -197,10 +234,7 @@ void VideoStream::threadProcess(VideoStream *data)
             }
         }
 
-        //av_free_packet(&packet);
-        packets.next();
-
-        now = current_timestamp();
+        data->packets->next();
 
         long long ellapsed = now - start;
         frames++;
@@ -218,14 +252,25 @@ void VideoStream::threadProcess(VideoStream *data)
     av_read_pause(format_ctx);
     av_frame_free(&decframe);
 
-    data->threadState = 0;
+    if (data->threadState != SHUTDOWN)
+        data->threadState = WAITING;
+    else
+        delete data->packets;
+
     data->thread = NULL;
+}
+
+std::vector<AVPacket> VideoStream::getPacketsSince(int64_t pts)
+{
+    return this->packets->getPacketsSince(pts);
 }
 
 VideoStream::~VideoStream()
 {
     if (this->thread)
-        this->threadState = 2;
+        this->threadState = SHUTDOWN;
+    else
+        delete this->packets;
 }
 
 FrameQueueItem::~FrameQueueItem()

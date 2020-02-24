@@ -166,18 +166,11 @@ YoloV3ObjectDetector::YoloV3ObjectDetector(string modelPath, string configPath, 
     this->size = Size(width, height);
 }
 
-DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, DetectedMovements &movements)
+DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects)
 {
-    if (!movements.empty() && (mat.cols > this->size.width || mat.rows > this->size.height))
+    if (!rects.empty() && (mat.cols > this->size.width || mat.rows > this->size.height))
     {
         DetectedObjects result;
-        list<Rect> rects;
-
-        for (int i = 0; i < movements.size(); i++)
-        {
-            Rect r = boundingRect(movements[i].contour);
-            rects.push_back(r);
-        }
 
         do
         {

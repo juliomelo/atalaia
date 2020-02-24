@@ -3,6 +3,7 @@
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
 #include "MovementDetector.hpp"
+#include <list>
 
 using namespace cv;
 using namespace dnn;
@@ -29,7 +30,7 @@ class ObjectDetector
         ObjectDetector(string modelPath, string configPath, string classesPath, double confThreshold = .5, double nmsThreshold = .4);
 
         std::vector<DetectedObject> classify(Mat &mat);
-        std::vector<DetectedObject> classifyFromMovements(Mat &mat, DetectedMovements &movements);
+        std::vector<DetectedObject> classifyFromMovements(Mat &mat, list<Rect> movements);
         
         void drawObject(Mat &frame, DetectedObject &obj);
 
