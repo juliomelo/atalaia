@@ -6,20 +6,13 @@
 // #include <unistd.h>
 // #include <sys/time.h>
 // #include "MovementDetector.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/highgui.hpp"
-#include "VideoStream.hpp"
 #include "util/BlockingQueue.hpp"
-#include "ObjectDetector.hpp"
-#include <set>
-#include "CameraAtalaia.hpp"
+#include "recorder/VideoStream.hpp"
+#include "recorder/MotionRecorder.hpp"
 
 extern "C"
 {
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
 #include <libavformat/avio.h>
-#include <libswscale/swscale.h>
 }
 
 using namespace cv;
@@ -38,11 +31,16 @@ int main(int argc, char **argv)
 	//	avcodec_register_all();
 	//avformat_network_init();
 
-	CameraAtalaia *streams[argc - 1];
+	VideoStreamQueue *queue[argc - 1];
+	VideoStream *stream[argc - 1];
+	MotionRecorder *recorder[argc - 1];
 
 	for (int i = 0; i < argc - 1; i++)
 	{
-		streams[i] = new CameraAtalaia(argv[i + 1]);
+		queue[i] = new VideoStreamQueue(30 * 5);
+		stream[i] = new VideoStream(queue[i]);
+		stream[i]->start(argv[i + 1]);
+		recorder[i] = new MotionRecorder(stream[i]);
 	}
 
 	int wait;

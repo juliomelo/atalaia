@@ -2,7 +2,7 @@
 
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
-#include "MovementDetector.hpp"
+#include "recorder/MovementDetector.hpp"
 #include <list>
 
 using namespace cv;

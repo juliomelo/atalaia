@@ -12,11 +12,12 @@ add_compile_options(-Wno-deprecated-declarations)
 # TODO: Adicione testes e instale destinos, se necessário.
 add_executable(atalaia-streaming
     main.cpp
-    CameraAtalaia.cpp CameraAtalaia.hpp
-    MovementDetector.cpp MovementDetector.hpp
+    util/BlockingQueue.hpp
+    recorder/VideoStream.cpp recorder/VideoStream.hpp
+    recorder/MovementDetector.cpp recorder/MovementDetector.hpp
+    recorder/MotionRecorder.cpp recorder/MotionRecorder.hpp
     ObjectDetector.cpp ObjectDetector.hpp
-    VideoStream.cpp VideoStream.hpp
-    util/BlockingQueue.hpp)
+)
 
 find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
 find_library(AVCODEC_LIBRARY avcodec)

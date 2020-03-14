@@ -1,9 +1,9 @@
 #pragma once
 
+#include <vector>
 #include <thread>
-#include "util/BlockingQueue.hpp"
+#include "../util/BlockingQueue.hpp"
 #include <opencv2/imgcodecs.hpp>
-#include "MovementDetector.hpp"
 
 extern "C"
 {
@@ -15,23 +15,7 @@ extern "C"
 
 #define BUFFER_SECONDS 15
 
-class CircularPacketArray
-{
-    public:
-        CircularPacketArray(AVRational frame_rate);
-        CircularPacketArray(int buffer_size);
-        ~CircularPacketArray();
-        void next();
-        AVPacket *current();
-        vector<AVPacket> getPacketsSince(int64_t pts);
-        int size();
-        bool full;
-
-    private:
-        int buffer_size;
-        AVPacket *packets;
-        int currentIndex;
-};
+using namespace std;
 
 class FrameQueueItem
 {
@@ -39,7 +23,6 @@ class FrameQueueItem
         ~FrameQueueItem();
         AVPacket *packet;
         cv::Mat mat;
-        DetectedMovements movements;
         AVRational time_base;
 };
 
@@ -47,25 +30,29 @@ enum VideoState
 {
     WAITING,
     PROCESSING,
-    RECORDING,
     SHUTDOWN,
     FAILURE
 };
 
+typedef BlockingQueue<FrameQueueItem *> VideoStreamQueue;
+
 class VideoStream
 {
     public:
-        VideoStream(BlockingQueue<FrameQueueItem *> *queue);
+        VideoStream(VideoStreamQueue *queue);
         ~VideoStream();
         int start(std::string url);
         vector<AVPacket> getPacketsSince(int64_t pts);
+        inline VideoStreamQueue *getQueue() { return this->queue; }
+        inline AVStream *getAVStream() { return this->vstrm; }
 
     private:
         std::thread *thread;
         std::string url;
         VideoState threadState;
-        BlockingQueue<FrameQueueItem *> *queue;
-        CircularPacketArray *packets;
+        VideoStreamQueue *queue;
+        AVStream *vstrm;
+        std::vector<uint8_t> framebuf;
 
         static void threadProcess(VideoStream *url);
 };
