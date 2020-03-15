@@ -47,7 +47,6 @@ public:
         this->_condition.wait(lock, [=] { return closed || !this->_queue.empty(); });
 
         if (closed && this->_queue.empty()) {
-            std::cout << "Pop null!\n";
             return NULL;
         }
 
@@ -75,5 +74,11 @@ public:
         std::cout << "Closed blocking queue!\n";
         this->closed = true;
         this->_condition.notify_all();
+    }
+
+    void waitShutdown()
+    {
+        std::unique_lock<std::mutex> lock(this->_mutex);
+        this->_condition.wait(lock, [=] { return closed && this->_queue.empty(); });
     }
 };

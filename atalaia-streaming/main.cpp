@@ -38,13 +38,13 @@ int main(int argc, char **argv)
 	for (int i = 0; i < argc - 1; i++)
 	{
 		queue[i] = new VideoStreamQueue(30 * 5);
-		stream[i] = new VideoStream(queue[i]);
-		stream[i]->start(argv[i + 1]);
+		stream[i] = new VideoStream();
+		stream[i]->start(argv[i + 1], queue[i]);
 		recorder[i] = new MotionRecorder(stream[i]);
 	}
 
-	int wait;
-	cin >> wait;
+	for (int i = 0; i < argc - 1; i++)
+		queue[i]->waitShutdown();
 
 	return (EXIT_SUCCESS);
 }
