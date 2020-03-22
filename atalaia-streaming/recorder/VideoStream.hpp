@@ -39,9 +39,9 @@ typedef BlockingQueue<FrameQueueItem *> VideoStreamQueue;
 class VideoStream
 {
     public:
-        VideoStream(VideoStreamQueue *queue);
+        VideoStream();
         ~VideoStream();
-        int start(std::string url);
+        int start(std::string url, VideoStreamQueue *queue);
         vector<AVPacket> getPacketsSince(int64_t pts);
         inline VideoStreamQueue *getQueue() { return this->queue; }
         inline AVStream *getAVStream() { return this->vstrm; }

@@ -1,0 +1,183 @@
+#include "ObjectRecorder.hpp"
+#include <opencv2/tracking/tracker.hpp>
+
+using namespace cv;
+
+// struct trackAnalysis
+// {
+//     double matchArea[][];
+
+//     bool operator() (int i, int j)
+//     {
+//         if (matchArea[i][j])
+//     }
+// }
+
+#define matchAreaMatrix(a, b, c) matchArea[a * nTracked * 2 + b * 2 + c]
+
+void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObjects, vector<Rect2d> trackedObjects)
+{
+    int nNew = newObjects.size();
+    int nTracked = trackedObjects.size();
+    double matchArea[nNew * nTracked * 2]; // new x tracked x (new area | last area)
+
+    memset(matchArea, 0, 2 * nNew * nTracked * sizeof(double));
+
+    for (int i = 0; i < nNew; i++) {
+        Rect doRect = newObjects[i].box;
+        Rect2d doRect2d(doRect);
+        double doArea = doRect.area();
+
+        for (int j = 0; j < nTracked; j++) {
+            double toArea = trackedObjects[j].area();
+            matchAreaMatrix(i, j, 0) = (doRect2d & trackedObjects[j]).area() / (doArea > toArea ? doArea : toArea);
+
+            double loArea = lastObjects[j].box.area();
+            matchAreaMatrix(i, j, 1) = (doRect & lastObjects[j].box).area() / (doArea > loArea ? doArea : loArea);
+        }
+    }
+
+    bool matchesNew[nNew], matchesTracked[nTracked];
+    memset(matchesNew, 0, sizeof(bool) * nNew);
+    memset(matchesTracked, 0, sizeof(bool) * nTracked);
+    int nMatches = 0;
+    bool iterate;
+
+    do
+    {
+        iterate = false;
+        int bestForNew[nNew];
+
+        for (int iNew = 0; iNew < nNew; iNew++)
+        {
+            int best = -1;
+
+            for (int iObj = 0; iObj < nTracked; iObj++)
+                if (matchAreaMatrix(iNew, iObj, 0) > matchAreaMatrix(iNew, best, 0) && newObjects[iNew].type == lastObjects[iObj].type)
+                    best = iNew;
+
+            bestForNew[iNew] = best;
+        }
+
+        int bestForTracked[nTracked];
+
+        for (int iObj = 0; iObj < nTracked; iObj++)
+        {
+            int best = -1;
+
+            for (int iNew = 0; iNew < nNew; iNew++)
+                if (matchAreaMatrix(iNew, iObj, 0) > matchAreaMatrix(best, iObj, 0) && newObjects[iNew].type == lastObjects[iObj].type)
+                    best = iNew;
+
+            bestForTracked[iObj] = best;
+
+            if (best != -1 && bestForNew[bestForTracked[iObj]] == iObj)
+            {
+                matchesNew[best] = true;
+                matchesTracked[iObj] = true;
+                nMatches++;
+                lastObjects[iObj].box = newObjects[best].box;
+
+                if (lastObjects[iObj].confidence < newObjects[best].confidence)
+                    lastObjects[iObj].confidence = newObjects[best].confidence;
+
+                iterate = nMatches < nNew;
+            }
+        }
+    } while (iterate);
+
+    for (int i = 0; i < nNew; i++)
+    {
+        if (!matchesNew[i])
+        {
+            for (int j = 0; j < nTracked; j++)
+            {
+                if (!matchesTracked[j] && matchAreaMatrix(i, j, 0) > .95)
+                {
+                    matchesNew[i] = true;
+                    matchesTracked[j] = true;
+
+                    lastObjects[j].box = newObjects[i].box;
+
+                    if (lastObjects[j].confidence < newObjects[i].confidence)
+                        lastObjects[j].confidence = newObjects[i].confidence;
+
+                    break;
+                }
+            }
+
+            if (!matchesNew[i])
+            {
+                lastObjects.push_back(newObjects[i]);
+            }
+        }
+    }
+
+    // Remove lost objects.
+    for (int i = nTracked - 1; i >= 0; i--)
+        if (!matchesTracked[i] && ++lastObjects[i].missCount > 30)
+            lastObjects.erase(lastObjects.begin() + i);
+}
+
+void ObjectRecorder::process(string file)
+{
+    MotionRecordReader reader(file);
+    FrameQueueItem frame;
+    DetectedMovements movements;
+    Ptr<MultiTracker> multiTracker = cv::MultiTracker::create();
+    vector<DetectedObject> knownObjects;
+
+    while (reader.readNext(&frame, movements))
+    {
+        if (movements.empty() && objects.empty())
+            continue;
+
+        multiTracker->update(frame.mat);
+
+        list<Rect> rects(movements.begin(), movements.end());
+        DetectedObjects detectedObjects = objectDetector.classifyFromMovements(frame->mat, rects);
+
+        if (!detectedObjects.empty())
+        {
+            bool interested = false;
+            vector<Rect2d> trackedObjs = multiTracker->getObjects();
+
+            for (int iDetectedObject = 0; iDetectedObject < detectedObjects.size(); iDetectedObject++)
+            {
+                Rect doRect = detectedObjects[i].box;
+                Rect2d doRect2d(doRect);
+                float doArea = doRect.area();
+
+                for (int iTrackedObject = 0; iTrackedObject < trackedObjs.size(); i++)
+                {
+                    if ((doRect2d & trackedObjs[iTrackedObject]).area() >= min(areaThreshold, detectedAreaThreshold))
+                    {
+                        match = true;
+                        break;
+                    }
+                    else
+                    {
+                        Rect2d obj = trackedObjs[i];
+                        rectangle(frame->mat, obj, Scalar(0, 255, 0));
+
+                        std::string label = format("Interesse %d", iTrackedObject + 1);
+
+                        int baseLine;
+                        Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+
+                        int top = max((int)obj.y, labelSize.height);
+                        rectangle(frame->mat, Point(obj.x, top),
+                                    Point(obj.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
+                        putText(frame->mat, label, Point(obj.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
+                    }
+                }
+
+                if (!match)
+                    multiTracker->add(TrackerKCF::create(), segmented, rect);
+            }
+
+            imshow("objects", frame.mat);
+            waitKey(5);
+        }
+    }
+}

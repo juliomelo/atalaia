@@ -16,7 +16,10 @@ add_executable(atalaia-streaming
     recorder/VideoStream.cpp recorder/VideoStream.hpp
     recorder/MovementDetector.cpp recorder/MovementDetector.hpp
     recorder/MotionRecorder.cpp recorder/MotionRecorder.hpp
-    ObjectDetector.cpp ObjectDetector.hpp
+    recorder/ObjectDetector.cpp recorder/ObjectDetector.hpp
+    recorder/ObjectRecorder.cpp recorder/ObjectRecorder.hpp
+    notify/Listener.hpp notify/Listener.cpp
+    notify/Notify.hpp notify/LocalNotifier.cpp
 )
 
 find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)

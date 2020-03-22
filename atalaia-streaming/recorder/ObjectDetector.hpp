@@ -2,7 +2,7 @@
 
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
-#include "recorder/MovementDetector.hpp"
+#include "MovementDetector.hpp"
 #include <list>
 
 using namespace cv;
@@ -15,11 +15,13 @@ class DetectedObject
             this->type = type;
             this->confidence = confidence;
             this->box = box;
+            this->missCount = 0;
         }
 
         std::string type;
         float confidence;
         Rect box;
+        int missCount;
 };
 
 typedef std::vector<DetectedObject> DetectedObjects;

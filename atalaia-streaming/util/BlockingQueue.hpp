@@ -16,12 +16,14 @@ private:
     std::condition_variable _condition;
     std::deque<T> _queue;
     bool closed;
+    T closedObject;
 
 public:
-    BlockingQueue(size_t max)
+    BlockingQueue(size_t max = 0, T closedObject = NULL)
     {
         this->max = max;
         this->closed = false;
+        this->closedObject = closedObject;
     }
 
     bool try_push(T const &value)
@@ -32,7 +34,9 @@ public:
         {
             std::unique_lock<std::mutex> lock(this->_mutex);
 
-            this->_condition.wait(lock, [=] { return this->_queue.size() < max; });
+            if (this->max > 0)
+                this->_condition.wait(lock, [=] { return this->_queue.size() < max; });
+                
             this->_queue.push_front(value);
         }
 
@@ -47,7 +51,7 @@ public:
         this->_condition.wait(lock, [=] { return closed || !this->_queue.empty(); });
 
         if (closed && this->_queue.empty()) {
-            return NULL;
+            return this->closedObject;
         }
 
         T rc(std::move(this->_queue.back()));

@@ -19,18 +19,19 @@ long long current_timestamp()
 	return milliseconds;
 }
 
-VideoStream::VideoStream(BlockingQueue<FrameQueueItem *> *queue)
+VideoStream::VideoStream()
 {
     this->thread = NULL;
-    this->queue = queue;
+    this->queue = NULL;
     this->threadState = WAITING;
 }
 
-int VideoStream::start(std::string url)
+int VideoStream::start(std::string url, BlockingQueue<FrameQueueItem *> *queue)
 {
     if (this->thread != NULL)
         return EXIT_FAILURE;
 
+    this->queue = queue;
     this->url = url;
     this->thread = new std::thread(this->threadProcess, this);
 
@@ -188,7 +189,10 @@ VideoStream::~VideoStream()
     cout << "VideoStream Shutdown\n";
 
     if (this->thread)
+    {
         this->threadState = SHUTDOWN;
+        delete this->thread;
+    }
 }
 
 FrameQueueItem::~FrameQueueItem()

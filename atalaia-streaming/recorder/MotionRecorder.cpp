@@ -65,7 +65,7 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
             // imshow("movements", item->mat);
             // waitKey(25);
-            dontStopUntil = item->packet->pts + 5 / (item->time_base.num / (float)item->time_base.den);
+            dontStopUntil = item->packet->pts + 5.0 / (item->time_base.num / (float)item->time_base.den);
 
             if (!record)
             {
@@ -118,7 +118,7 @@ Record::Record(AVStream *i_video_stream)
     cout << "New file: " << filename << "\n";
 
     string video = filename + ".mp4";
-    string data = filename + ".data";
+    string data = filename + ".movements";
 
     this->data = fopen(data.c_str(), "w");
 
@@ -162,30 +162,69 @@ std::string Record::getFileName()
 
 void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
 {
-    fwrite(&packet->size, sizeof(int), 1, this->data);
-    fwrite(&packet->pts, sizeof(int64_t), 1, this->data);
-
     AVPacket *outPacket = av_packet_clone(packet);
-    outPacket->pts = av_rescale_q_rnd(outPacket->pts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX));
+    outPacket->pts = av_rescale_q_rnd(outPacket->pts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
     outPacket->dts = av_rescale_q_rnd(outPacket->dts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
     outPacket->duration = av_rescale_q(outPacket->duration, this->i_video_stream->time_base, this->o_video_stream->time_base);
     outPacket->pos = -1;
     av_interleaved_write_frame(o_fmt_ctx, outPacket);
 
-    if (movements)
-    {
-        unsigned long nMovements = movements->size();
+    unsigned long nMovements = movements ? movements->size() : 0;
+    fwrite(&nMovements, sizeof(unsigned long), 1, this->data);
 
-        fwrite(&nMovements, sizeof(unsigned long), 1, this->data);
+    for (int i = 0; i < nMovements; i++)
+    {
+        unsigned long nPoints = (*movements)[i].contour.size();
+
+        fwrite(&nPoints, sizeof(unsigned long), 1, this->data);
+
+        for (unsigned long j = 0; j < nPoints; j++)
+            fwrite(&((*movements)[i].contour[j]), sizeof(Point), 1, this->data);
+    }
+}
+
+MotionRecordReader::MotionRecordReader(string filename) : queue(1)
+{
+    string videoFilename = filename + ".mp4";
+    this->video.start(videoFilename, &this->queue);
+
+    string movementsFilename = filename + ".movements";
+    this->fMovements = fopen(movementsFilename.c_str(), "r");
+}
+
+bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements &movementsDst)
+{
+    unsigned long nMovements;
+
+    do
+    {
+        /* TO-DO: We don't need to decode every frame, but we could skip
+         * all frames before keyframe, if there is such one new before
+         * movement start.
+         */
+        item = this->queue.pop();
+
+        if (!item)
+            return false;
+
+        fread(&nMovements, sizeof(unsigned long), 1, this->fMovements);
 
         for (int i = 0; i < nMovements; i++)
         {
-            unsigned long nPoints = (*movements)[i].contour.size();
-
-            fwrite(&nPoints, sizeof(unsigned long), 1, this->data);
+            unsigned long nPoints;
+            fread(&nPoints, sizeof(unsigned long), 1, this->fMovements);
+            vector<Point> contour(nPoints);
 
             for (unsigned long j = 0; j < nPoints; j++)
-                fwrite(&((*movements)[i].contour[j]), sizeof(Point), 1, this->data);
+            {
+                Point point;
+                fread(&point, sizeof(Point), 1, this->fMovements);
+                contour.push_back(point);
+            }
+
+            movementsDst.push_back(contour);
         }
-    }
+    } while (nMovements == 0);
+
+    return true;
 }
