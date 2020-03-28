@@ -29,9 +29,9 @@ typedef std::vector<DetectedObject> DetectedObjects;
 class ObjectDetector
 {
     public:
-        ObjectDetector(string modelPath, string configPath, string classesPath, double confThreshold = .5, double nmsThreshold = .4);
+        ObjectDetector(string modelPath, string configPath, string classesPath, double confThreshold = .5, double nmsThreshold = .25);
 
-        std::vector<DetectedObject> classify(Mat &mat);
+        std::vector<DetectedObject> classify(Mat &mat, bool runNMS = true);
         std::vector<DetectedObject> classifyFromMovements(Mat &mat, list<Rect> movements);
         
         void drawObject(Mat &frame, DetectedObject &obj);
@@ -47,11 +47,11 @@ class ObjectDetector
         double nmsThreshold;
 
         void preprocess(const Mat &frame, Net &net, Size inpSize);
-        std::vector<DetectedObject> postprocess(Mat &frame, const std::vector<Mat> &outs, Net &net);
+        std::vector<DetectedObject> postprocess(Mat &frame, const std::vector<Mat> &outs, Net &net, bool runNMS);
 };
 
 class YoloV3ObjectDetector : public ObjectDetector
 {
     public:
-        YoloV3ObjectDetector(string modelPath = "data/yolov3-tiny.weights", string configPath = "data/yolov3-tiny.cfg", string classesPath = "data/coco.names", int width = 416, int height = 416); // yolov3 - tiny uses 416x416 images
+        YoloV3ObjectDetector(string modelPath = "/data/yolo/yolov3-tiny.weights", string configPath = "/data/yolo/yolov3-tiny.cfg", string classesPath = "/data/yolo/coco.names", int width = 416, int height = 416); // yolov3 - tiny uses 416x416 images
 };

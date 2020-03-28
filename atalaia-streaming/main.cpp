@@ -9,6 +9,7 @@
 #include "util/BlockingQueue.hpp"
 #include "recorder/VideoStream.hpp"
 #include "recorder/MotionRecorder.hpp"
+#include "recorder/ObjectRecorder.hpp"
 
 extern "C"
 {
@@ -23,6 +24,17 @@ int main(int argc, char **argv)
 	if (argc < 2) {
 		printf("ERROR: URL not provided.\n");
 		return EXIT_FAILURE;
+	}
+
+	if (argc == 3 && !strcmp(argv[1], "obj"))
+	{
+		string file = string(argv[2]);
+
+		cout << "Analisando " << file << "\n";
+		ObjectRecorder recorder;
+		recorder.process(file);
+
+		return EXIT_SUCCESS;
 	}
 
 	// Register everything

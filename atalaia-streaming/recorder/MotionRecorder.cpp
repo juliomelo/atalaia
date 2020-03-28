@@ -42,8 +42,8 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
            break;
         }
 
-        // imshow("thread", item->mat);
-        // waitKey(25);
+        //imshow("thread", item->mat);
+        //waitKey(25);
 
         DetectedMovements movements = item->mat.empty() ? DetectedMovements() : movementDetector.detectMovement(item->mat);
 
@@ -58,13 +58,13 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
         if (!movements.empty())
         {
-            // for (int i = 0; i < movements.size(); i++)
-            // {
-            //     polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
-            // }
+            for (int i = 0; i < movements.size(); i++)
+            {
+                 polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
+            }
 
-            // imshow("movements", item->mat);
-            // waitKey(25);
+            imshow("movements", item->mat);
+            waitKey(25);
             dontStopUntil = item->packet->pts + 5.0 / (item->time_base.num / (float)item->time_base.den);
 
             if (!record)

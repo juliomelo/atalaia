@@ -18,6 +18,10 @@ class DetectedMovement
         }
 
         vector<Point> contour;
+
+        operator Rect() const {
+            return cv::boundingRect(this->contour);
+        }
 };
 
 typedef std::vector<DetectedMovement> DetectedMovements;

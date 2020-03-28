@@ -1,7 +1,15 @@
 {
-    "dockerFile": "Dockerfile",
+    "dockerFile": "../Dockerfile",
+    "build": {
+        "target": "devcontainer"
+    },
     "name": "atalaia-streaming-cpp",
     "extensions": [
         "ms-vscode.cpptools", "ms-vscode.cmake-tools"
-    ]
+    ],
+    "containerEnv": {
+        "DISPLAY": "${env:DISPLAY}"
+    },
+    "runArgs": ["--net", "host", "-v", "/tmp/.X11-unix:/tmp/.X11-unix"],
+    "shutdownAction": "stopContainer"
 }

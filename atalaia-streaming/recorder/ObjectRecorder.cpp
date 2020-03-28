@@ -1,6 +1,6 @@
 #include "ObjectRecorder.hpp"
 #include <opencv2/tracking/tracker.hpp>
-
+#include <opencv2/highgui.hpp>
 using namespace cv;
 
 // struct trackAnalysis
@@ -15,8 +15,9 @@ using namespace cv;
 
 #define matchAreaMatrix(a, b, c) matchArea[a * nTracked * 2 + b * 2 + c]
 
-void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObjects, vector<Rect2d> trackedObjects)
+void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObjects, Ptr<MultiTracker> &tracker, Mat &mat)
 {
+    vector<Rect2d> trackedObjects = tracker->getObjects();
     int nNew = newObjects.size();
     int nTracked = trackedObjects.size();
     double matchArea[nNew * nTracked * 2]; // new x tracked x (new area | last area)
@@ -86,6 +87,24 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
         }
     } while (iterate);
 
+    bool removedSome = false;
+
+    // Remove lost objects.
+    for (int i = nTracked - 1; i >= 0; i--)
+        if (!matchesTracked[i] && ++lastObjects[i].missCount > 30)
+        {
+            lastObjects.erase(lastObjects.begin() + i);
+            removedSome = true;
+        }
+
+    if (removedSome) {
+        delete tracker; 
+        tracker = cv::MultiTracker::create();
+
+        for (int i = 0; i < lastObjects.size(); i++)
+            tracker->add(TrackerKCF::create(), mat, lastObjects[i].box);
+    }
+
     for (int i = 0; i < nNew; i++)
     {
         if (!matchesNew[i])
@@ -109,75 +128,49 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
             if (!matchesNew[i])
             {
                 lastObjects.push_back(newObjects[i]);
+                tracker->add(TrackerKCF::create(), mat, lastObjects[i].box);
             }
         }
     }
-
-    // Remove lost objects.
-    for (int i = nTracked - 1; i >= 0; i--)
-        if (!matchesTracked[i] && ++lastObjects[i].missCount > 30)
-            lastObjects.erase(lastObjects.begin() + i);
 }
 
 void ObjectRecorder::process(string file)
 {
     MotionRecordReader reader(file);
-    FrameQueueItem frame;
+    FrameQueueItem *frame;
     DetectedMovements movements;
     Ptr<MultiTracker> multiTracker = cv::MultiTracker::create();
-    vector<DetectedObject> knownObjects;
+    DetectedObjects knownObjects;
 
-    while (reader.readNext(&frame, movements))
+    while (reader.readNext(frame, movements))
     {
-        if (movements.empty() && objects.empty())
-            continue;
-
-        multiTracker->update(frame.mat);
+        multiTracker->update(frame->mat);
 
         list<Rect> rects(movements.begin(), movements.end());
         DetectedObjects detectedObjects = objectDetector.classifyFromMovements(frame->mat, rects);
+        knownObjects = detectedObjects;
+        //trackObjects(detectedObjects, knownObjects, multiTracker, frame->mat);
+        
+        for (int i = 0; i < knownObjects.size(); i++) {
+            DetectedObject obj = knownObjects[i];
+            rectangle(frame->mat, obj.box, Scalar(0, 255, 0));
 
-        if (!detectedObjects.empty())
-        {
-            bool interested = false;
-            vector<Rect2d> trackedObjs = multiTracker->getObjects();
+            std::string label = format("Obj %d: %s (c: %f; m: %d)", i + 1, obj.type.c_str(), obj.confidence, obj.missCount);
+            cout << label << " Rect: [" << obj.box.x << ", " << obj.box.y << "; " << obj.box.x + obj.box.width << ", " << obj.box.y + obj.box.height << "]\n";
 
-            for (int iDetectedObject = 0; iDetectedObject < detectedObjects.size(); iDetectedObject++)
-            {
-                Rect doRect = detectedObjects[i].box;
-                Rect2d doRect2d(doRect);
-                float doArea = doRect.area();
+            int baseLine;
+            Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 
-                for (int iTrackedObject = 0; iTrackedObject < trackedObjs.size(); i++)
-                {
-                    if ((doRect2d & trackedObjs[iTrackedObject]).area() >= min(areaThreshold, detectedAreaThreshold))
-                    {
-                        match = true;
-                        break;
-                    }
-                    else
-                    {
-                        Rect2d obj = trackedObjs[i];
-                        rectangle(frame->mat, obj, Scalar(0, 255, 0));
-
-                        std::string label = format("Interesse %d", iTrackedObject + 1);
-
-                        int baseLine;
-                        Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
-
-                        int top = max((int)obj.y, labelSize.height);
-                        rectangle(frame->mat, Point(obj.x, top),
-                                    Point(obj.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
-                        putText(frame->mat, label, Point(obj.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
-                    }
-                }
-
-                if (!match)
-                    multiTracker->add(TrackerKCF::create(), segmented, rect);
-            }
-
-            imshow("objects", frame.mat);
-            waitKey(5);
+            int top = std::max((int)obj.box.y, labelSize.height);
+            rectangle(frame->mat, Point(obj.box.x, top),
+                        Point(obj.box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
+            putText(frame->mat, label, Point(obj.box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
         }
+
+        cout << "---" << "\n";
+        imshow("objects", frame->mat);
+        waitKey(5);
+
+        delete frame;
     }
 }

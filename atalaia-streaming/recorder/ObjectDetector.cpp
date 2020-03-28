@@ -40,7 +40,7 @@ inline void ObjectDetector::preprocess(const Mat &frame, Net &net, Size inpSize)
     if (inpSize.height <= 0)
         inpSize.height = frame.rows;
     //blobFromImage(frame, blob, 1.0, inpSize, Scalar(), false, false);
-    blobFromImage(frame, blob, 1.0 / 255.0, inpSize, Scalar(), true, false);
+    blobFromImage(frame, blob, 1.0 / 255.0, inpSize, Scalar(), false, false);
 
     // Run a model.
     this->net.setInput(blob);
@@ -61,7 +61,7 @@ void translate(DetectedObjects &d, int dx, int dy)
     }
 }
 
-DetectedObjects ObjectDetector::postprocess(Mat &frame, const std::vector<Mat> &outs, Net &net)
+DetectedObjects ObjectDetector::postprocess(Mat &frame, const std::vector<Mat> &outs, Net &net, bool runNMS)
 {
     DetectedObjects results;
     std::vector<int> classIds;
@@ -137,28 +137,34 @@ DetectedObjects ObjectDetector::postprocess(Mat &frame, const std::vector<Mat> &
     else
         CV_Error(Error::StsNotImplemented, "Unknown output layer type: " + outLayerType);
 
-    std::vector<int> indices;
-    NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);
-
     DetectedObjects objects;
 
-    for (size_t i = 0; i < indices.size(); ++i)
-        objects.push_back(DetectedObject(this->classes[classIds[i]], confidences[i], boxes[i]));
+    if (runNMS)
+    {
+        std::vector<int> indices;
+        NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);
+
+        for (size_t i = 0; i < indices.size(); ++i)
+        {
+            int idx = indices[i];
+            objects.push_back(DetectedObject(this->classes[classIds[idx]], confidences[idx], boxes[idx]));
+        }
+    }
+    else
+        for (size_t i = 0; i < boxes.size(); ++i)
+            objects.push_back(DetectedObject(this->classes[classIds[i]], confidences[i], boxes[i]));
 
     return objects;
 }
 
-DetectedObjects ObjectDetector::classify(Mat &mat)
+DetectedObjects ObjectDetector::classify(Mat &mat, bool runNMS)
 {
-    imshow("Classify", mat);
-    cv::waitKey((int)(1000.0 / 30));
-
     preprocess(mat, net, this->size);
 
     std::vector<Mat> outs;
     net.forward(outs, outNames);
 
-    return postprocess(mat, outs, net);
+    return postprocess(mat, outs, net, runNMS);
 }
 
 YoloV3ObjectDetector::YoloV3ObjectDetector(string modelPath, string configPath, string classesPath, int width, int height) : ObjectDetector(modelPath, configPath, classesPath)
@@ -171,72 +177,106 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
     if (!rects.empty() && (mat.cols > this->size.width || mat.rows > this->size.height))
     {
         DetectedObjects result;
+        float factor = 1 / (float) 8 * (this->size.width / (float) mat.cols);
+        Size fullscreenThreshold = Size((int)(this->size.width * factor), (int)(this->size.height * factor));
+        bool classifyFullscreen = false;
 
-        do
+        for (list<Rect>::iterator it = rects.begin(); it != rects.end(); ++it)
         {
-            uint minX = ~0, minY = ~0, maxX = 0, maxY = 0;
+            Rect r = *it;
+
+            if (r.width >= fullscreenThreshold.width || r.height >= fullscreenThreshold.height)
+            {
+                it = rects.erase(it);
+                classifyFullscreen = true;
+            }
+        }
+
+        if (classifyFullscreen)
+        {
+            DetectedObjects d = this->classify(mat, false);
+            result.insert(result.end(), d.begin(), d.end());
+        }
+
+        // Classify smaller rectangles
+        while (!rects.empty())
+        {
+            uint x1 = ~0, y1 = ~0;
 
             for (list<Rect>::iterator it = rects.begin(); it != rects.end(); ++it)
             {
                 Rect r = *it;
 
-                if (r.width >= this->size.width || r.height >= this->size.height)
+                x1 = x1 < r.x ? x1 : r.x;
+                y1 = y1 < r.y ? y1 : r.y;
+            }
+
+            uint minX2 = x1 + this->size.width, minY2 = y1 + this->size.height;
+            uint maxX2 = x1 + this->size.width * 8 calcular aqui! a ideia eh pegar o maximo de objetos em que o menor seja 1/8;
+            uint x2 = 0, y2 = 0;
+
+            // Let's classify every object in the viewport.
+            for (list<Rect>::iterator it = rects.begin(); it != rects.end();)
+            {
+                Rect r = *it;
+
+                if (r.x >= x1 && r.x + r.width <= minX2 && r.y >= y1 && r.y + r.height <= minY2)
                 {
-                    // The movement area is bigger than desired size, so let's classify it directly...
-                    Mat crop = mat(r);
-                    DetectedObjects d = this->classify(crop);
-                    translate(d, r.x, r.y);
-                    result.insert(result.end(), d.begin(), d.end());
+                    x2 = x2 > r.x + r.width ? x2 : r.x + r.width;
+                    y2 = y2 > r.y + r.height ? y2 : r.y + r.height;
                     it = rects.erase(it);
                 } else {
-                    minX = minX < r.x ? minX : r.x;
-                    minY = minY < r.y ? minY : r.y;
+                    ++it;
                 }
             }
 
-            if (!rects.empty())
-            {
-                uint right = minX + this->size.width, bottom = minY + this->size.height;
+            // Let's center the image
+            Rect r(x1 - (minX2 - x2) / 2, y1 - (minY2 - y2) / 2, this->size.width, this->size.height);
 
-                // Let's classify every object in the viewport.
-                for (list<Rect>::iterator it = rects.begin(); it != rects.end();)
-                {
-                    Rect r = *it;
+            if (r.x < 0)
+                r.x = 0;
+            else if (r.x + r.width > mat.cols)
+                r.x = mat.cols - r.width;
 
-                    if (r.x >= minX && r.x + r.width <= right && r.y >= minY && r.y + r.height <= bottom)
-                    {
-                        maxX = maxX > r.x + r.width ? maxX : r.x + r.width;
-                        maxY = maxY > r.y + r.height ? maxY : r.y + r.height;
-                        it = rects.erase(it);
-                    } else {
-                        ++it;
-                    }
-                }
+            if (r.y < 0)
+                r.y = 0;
+            else if (r.y + r.height > mat.rows)
+                r.y = mat.rows - r.height;
 
-                // Let's center the image
-                Rect r(minX - (right - maxX) / 2, minY - (bottom - maxY) / 2, this->size.width, this->size.height);
+            Mat crop = mat(r);
+            DetectedObjects d = this->classify(crop, false);
+            translate(d, r.x, r.y);
+            result.insert(result.end(), d.begin(), d.end());
+        }
 
-                if (r.x < 0)
-                    r.x = 0;
-                else if (r.x + r.width > mat.cols)
-                    r.x = mat.cols - r.width;
+        std::vector<Rect> boxes;
+        std::vector<float> confidences;
+        std::vector<int> indices;
 
-                if (r.y < 0)
-                    r.y = 0;
-                else if (r.y + r.height > mat.rows)
-                    r.y = mat.rows - r.height;
+        for (int i = 0; i < result.size(); i++)
+        {
+            DetectedObject obj = result[i];
+            boxes.push_back(obj.box);
+            confidences.push_back(obj.confidence);
+            
+        }
+         
+        NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);
 
-                Mat crop = mat(r);
-                DetectedObjects d = this->classify(crop);
-                translate(d, r.x, r.y);
-                result.insert(result.end(), d.begin(), d.end());
-            }
-        } while (!rects.empty());
+        DetectedObjects newResult;
 
-        return result;
+        for (size_t i = 0; i < indices.size(); ++i)
+        {
+            int idx = indices[i];
+            cout << ": Found: " << idx << " " << result[idx].type << " " << result[idx].confidence << "\n";  
+
+            newResult.push_back(result[indices[i]]);
+        }
+
+        return newResult;
     }
 
-    return ObjectDetector::classify(mat);
+    return ObjectDetector::classify(mat, true);
 }
 
 void ObjectDetector::drawObject(Mat &frame, DetectedObject &obj)

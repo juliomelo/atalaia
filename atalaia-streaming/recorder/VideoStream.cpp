@@ -47,13 +47,18 @@ void VideoStream::threadProcess(VideoStream *data)
 
     if (avformat_open_input(&format_ctx, data->url.c_str(), NULL, NULL) != 0)
     {
+        cout << "Can't open " << data->url << "\n";
         data->threadState = FAILURE;
+        data->thread = NULL;
+        data->queue->close();
         return;
     }
 
     if (avformat_find_stream_info(format_ctx, NULL) < 0)
     {
         data->threadState = FAILURE;
+        data->thread = NULL;
+        data->queue->close();
         return;
     }
 
@@ -64,6 +69,8 @@ void VideoStream::threadProcess(VideoStream *data)
     if (VideoStream_index < 0)
     {
         data->threadState = FAILURE;
+        data->thread = NULL;
+        data->queue->close();
         return;
     }
 
@@ -72,6 +79,8 @@ void VideoStream::threadProcess(VideoStream *data)
     if (avcodec_open2(vstrm->codec, vcodec, nullptr) < 0)
     {
         data->threadState = FAILURE;
+        data->thread = NULL;
+        data->queue->close();
         return;
     }
 
@@ -100,6 +109,8 @@ void VideoStream::threadProcess(VideoStream *data)
     {
         std::cerr << "fail to sws_getCachedContext";
         data->threadState = FAILURE;
+        data->thread = NULL;
+        data->queue->close();
         return;
     }
 

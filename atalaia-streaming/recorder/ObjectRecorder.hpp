@@ -6,9 +6,11 @@
 
 class ObjectRecorder : public Listener
 {
+    public:
+        void process(string file);
+        
     private:
         YoloV3ObjectDetector objectDetector;
-        void process(string file);
 };
 
 class FollowedObject : public DetectedObject
