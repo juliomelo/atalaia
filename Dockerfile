@@ -6,7 +6,7 @@ RUN apt update && apt install -y \
     ccache yasm \
     libdc1394-utils libv4l2rds0 liblapacke libatlas3-base libopenblas-base liblapack3 \
     libgstreamer1.0-0 libgstreamer-plugins-base1.0
-#libgtk2.0-0 libatk1.0-0
+    libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module
 
 ###
 # IA

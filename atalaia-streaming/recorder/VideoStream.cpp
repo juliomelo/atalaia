@@ -24,6 +24,7 @@ VideoStream::VideoStream()
     this->thread = NULL;
     this->queue = NULL;
     this->threadState = WAITING;
+    this->format_ctx = NULL;
 }
 
 int VideoStream::start(std::string url, BlockingQueue<FrameQueueItem *> *queue)
@@ -43,18 +44,40 @@ void VideoStream::threadProcess(VideoStream *data)
     cout << "Connecting to " << data->url << "...\n";
 
     data->threadState = PROCESSING;
-    AVFormatContext *format_ctx = NULL;
+    AVDictionary *opts = NULL;
 
-    if (avformat_open_input(&format_ctx, data->url.c_str(), NULL, NULL) != 0)
+    if (!strncmp(data->url.c_str(), "rtsp://", 7))
+        av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+
+    if (avformat_open_input(&data->format_ctx, data->url.c_str(), NULL, &opts) != 0)
     {
         cout << "Can't open " << data->url << "\n";
+
+        if (!opts || avformat_open_input(&data->format_ctx, data->url.c_str(), NULL, NULL) != 0)
+        {
+            data->threadState = FAILURE;
+            data->thread = NULL;
+            data->queue->close();
+            return;
+        }
+
+        cout << "Connected without TCP: " << data->url << "\n";
+    }
+
+    if (!data->format_ctx)
+    {
+        cerr << "WHAT?! No format_ctx!\n";
         data->threadState = FAILURE;
         data->thread = NULL;
         data->queue->close();
         return;
     }
 
-    if (avformat_find_stream_info(format_ctx, NULL) < 0)
+    if (opts) {
+        av_dict_free(&opts);
+    }
+
+    if (avformat_find_stream_info(data->format_ctx, NULL) < 0)
     {
         data->threadState = FAILURE;
         data->thread = NULL;
@@ -64,7 +87,7 @@ void VideoStream::threadProcess(VideoStream *data)
 
     AVCodec *vcodec = nullptr;
 
-    int VideoStream_index = av_find_best_stream(format_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &vcodec, 0);
+    int VideoStream_index = av_find_best_stream(data->format_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &vcodec, 0);
 
     if (VideoStream_index < 0)
     {
@@ -74,7 +97,7 @@ void VideoStream::threadProcess(VideoStream *data)
         return;
     }
 
-    AVStream *vstrm = data->vstrm = format_ctx->streams[VideoStream_index];
+    AVStream *vstrm = data->vstrm = data->format_ctx->streams[VideoStream_index];
 
     if (avcodec_open2(vstrm->codec, vcodec, nullptr) < 0)
     {
@@ -86,7 +109,7 @@ void VideoStream::threadProcess(VideoStream *data)
 
     std::cout
         << "url: " << data->url << "\n"
-        << "format: " << format_ctx->iformat->name << "\n"
+        << "format: " << data->format_ctx->iformat->name << "\n"
         << "vcodec: " << vcodec->name << "\n"
         << "size:   " << vstrm->codec->width << 'x' << vstrm->codec->height << "\n"
         << "fps:    " << av_q2d(vstrm->codec->framerate) << " [fps]\n"
@@ -95,7 +118,7 @@ void VideoStream::threadProcess(VideoStream *data)
         << "frame:  " << vstrm->nb_frames << "\n"
         << std::flush;
 
-    av_read_play(format_ctx); //play RTSP
+    av_read_play(data->format_ctx); //play RTSP
 
     const int dst_width = vstrm->codec->width;
     const int dst_height = vstrm->codec->height;
@@ -127,7 +150,7 @@ void VideoStream::threadProcess(VideoStream *data)
     AVPacket packet;
     av_init_packet(&packet);
 
-    while (data->threadState == PROCESSING && av_read_frame(format_ctx, &packet) >= 0)
+    while (data->threadState == PROCESSING && av_read_frame(data->format_ctx, &packet) >= 0)
     {
         now = current_timestamp();
 
@@ -149,6 +172,13 @@ void VideoStream::threadProcess(VideoStream *data)
                     item->packet = av_packet_clone(&packet);
                     item->mat = img.clone();
                     item->time_base = vstrm->time_base;
+
+                    // if (!strncmp(data->url.c_str(), "rtsp://", 7))
+                    // {
+                    //     cv::resize(img, img, Size(320, 240));
+                    //     imshow(data->url.c_str(), img);
+                    //     waitKey(100);
+                    // }
 
                     if (!data->queue->try_push(item)) {
                         cout << "Can't push item to queue!\n";
@@ -186,13 +216,26 @@ void VideoStream::threadProcess(VideoStream *data)
 
     cout << "Stopping " << data->url << "...\n";
 
-    av_read_pause(format_ctx);
+    av_frame_free(&frame);
     av_frame_free(&decframe);
+
+    //av_free(vcodec);
+    //av_free(data->format_ctx);
+    sws_freeContext(swsctx);
+
 
     data->threadState = SHUTDOWN;
     data->thread = NULL;
 
     data->queue->close();
+    data->queue->waitShutdown();
+
+
+    if (data->format_ctx)
+    {
+        avformat_close_input(&data->format_ctx);
+        data->format_ctx = NULL;
+    }
 }
 
 VideoStream::~VideoStream()

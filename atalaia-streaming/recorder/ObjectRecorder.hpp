@@ -7,7 +7,7 @@
 class ObjectRecorder : public Listener
 {
     public:
-        void process(string file);
+        virtual void process(string file);
         
     private:
         YoloV3ObjectDetector objectDetector;

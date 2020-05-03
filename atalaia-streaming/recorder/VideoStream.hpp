@@ -40,7 +40,7 @@ class VideoStream
 {
     public:
         VideoStream();
-        ~VideoStream();
+        virtual ~VideoStream();
         int start(std::string url, VideoStreamQueue *queue);
         vector<AVPacket> getPacketsSince(int64_t pts);
         inline VideoStreamQueue *getQueue() { return this->queue; }
@@ -51,6 +51,7 @@ class VideoStream
         std::string url;
         VideoState threadState;
         VideoStreamQueue *queue;
+        AVFormatContext *format_ctx;
         AVStream *vstrm;
         std::vector<uint8_t> framebuf;
 

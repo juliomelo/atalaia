@@ -12,6 +12,9 @@ using namespace cv;
 class DetectedMovement
 {
     public:
+        DetectedMovement()
+        { }
+        
         DetectedMovement(vector<Point> &contour)
         {
             this->contour = contour;

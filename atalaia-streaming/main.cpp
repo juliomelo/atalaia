@@ -10,6 +10,7 @@
 #include "recorder/VideoStream.hpp"
 #include "recorder/MotionRecorder.hpp"
 #include "recorder/ObjectRecorder.hpp"
+#include <thread>
 
 extern "C"
 {
@@ -43,20 +44,34 @@ int main(int argc, char **argv)
 	//	avcodec_register_all();
 	//avformat_network_init();
 
+	ObjectRecorder objRecorder;
 	VideoStreamQueue *queue[argc - 1];
 	VideoStream *stream[argc - 1];
 	MotionRecorder *recorder[argc - 1];
+	LocalNotifier notifier(&objRecorder);
 
 	for (int i = 0; i < argc - 1; i++)
 	{
 		queue[i] = new VideoStreamQueue(30 * 5);
 		stream[i] = new VideoStream();
 		stream[i]->start(argv[i + 1], queue[i]);
-		recorder[i] = new MotionRecorder(stream[i]);
+		recorder[i] = new MotionRecorder(stream[i], &notifier);
 	}
+
+	cout << "Wainting " << argc  << " streaming to finish.\n";
 
 	for (int i = 0; i < argc - 1; i++)
 		queue[i]->waitShutdown();
 
+	cout << "Wainting " << argc  << " object recorder to finish.\n";
+
+	objRecorder.waitShutdown(true);
+
+	cout << "Done.\n";
+
 	return (EXIT_SUCCESS);
+}
+
+void processMotionRecord() {
+
 }

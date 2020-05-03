@@ -1,7 +1,8 @@
-#pragme once
+#pragma once
 
 #include <string>
-#include "util/BlockingQueue.hpp"
+#include "../util/BlockingQueue.hpp"
+#include "Listener.hpp"
 
 using namespace std;
 
@@ -17,12 +18,13 @@ class Notifier
         virtual void notify(string filename, NotifyEvent event) = 0;
 };
 
-class LocalNotifier : Notifier
+class LocalNotifier : public Notifier
 {
     public:
-        LocalNotifier();
+        LocalNotifier(Listener *movements);
 
     private:
-        Listener movements;
+        Listener *movements;
         //Listener objects;
+        virtual void notify(string filename, NotifyEvent event);
 };

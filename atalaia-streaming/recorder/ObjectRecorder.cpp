@@ -137,16 +137,18 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
 void ObjectRecorder::process(string file)
 {
     MotionRecordReader reader(file);
-    FrameQueueItem *frame;
-    DetectedMovements movements;
-    Ptr<MultiTracker> multiTracker = cv::MultiTracker::create();
+    FrameQueueItem *frame = NULL;
+    DetectedMovements *movements;
+    MultiTracker multiTracker;
     DetectedObjects knownObjects;
+
+    cout << "Processing " << file << "\n";
 
     while (reader.readNext(frame, movements))
     {
-        multiTracker->update(frame->mat);
+        multiTracker.update(frame->mat);
 
-        list<Rect> rects(movements.begin(), movements.end());
+        list<Rect> rects(movements->begin(), movements->end());
         DetectedObjects detectedObjects = objectDetector.classifyFromMovements(frame->mat, rects);
         knownObjects = detectedObjects;
         //trackObjects(detectedObjects, knownObjects, multiTracker, frame->mat);
@@ -167,10 +169,17 @@ void ObjectRecorder::process(string file)
             putText(frame->mat, label, Point(obj.box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
         }
 
-        cout << "---" << "\n";
-        imshow("objects", frame->mat);
-        waitKey(5);
+        if (knownObjects.size() > 0) {
+            cout << "---" << "\n";
+            Mat show;
+            resize(frame->mat, show, Size(640, 480));
+            imshow("objects", show);
+            waitKey(500);
+        }
 
         delete frame;
+        delete movements;
     }
+
+    cout << "Processed " << file << "\n";
 }

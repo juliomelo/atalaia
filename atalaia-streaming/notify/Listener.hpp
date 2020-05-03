@@ -12,6 +12,7 @@ class Listener
         Listener();
         virtual ~Listener();
         inline bool enqueue(string file) { return this->queue.try_push(file); }
+        void waitShutdown(bool close);
 
     protected:
         virtual void process(string file) = 0;

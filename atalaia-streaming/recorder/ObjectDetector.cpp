@@ -31,14 +31,17 @@ ObjectDetector::ObjectDetector(string modelPath, string configPath, string class
     this->nmsThreshold = nmsThreshold;
 }
 
-inline void ObjectDetector::preprocess(const Mat &frame, Net &net, Size inpSize)
+inline void ObjectDetector::preprocess(const Mat &originalFrame, Net &net, Size inpSize)
 {
     static Mat blob;
     // Create a 4D blob from a frame.
     if (inpSize.width <= 0)
-        inpSize.width = frame.cols;
+        inpSize.width = originalFrame.cols;
     if (inpSize.height <= 0)
-        inpSize.height = frame.rows;
+        inpSize.height = originalFrame.rows;
+    
+    Mat frame;
+    resize(originalFrame, frame, inpSize);
     //blobFromImage(frame, blob, 1.0, inpSize, Scalar(), false, false);
     blobFromImage(frame, blob, 1.0 / 255.0, inpSize, Scalar(), false, false);
 
@@ -172,16 +175,18 @@ YoloV3ObjectDetector::YoloV3ObjectDetector(string modelPath, string configPath, 
     this->size = Size(width, height);
 }
 
+#define CLASSIFY_FACTOR 8
+
 DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects)
 {
     if (!rects.empty() && (mat.cols > this->size.width || mat.rows > this->size.height))
     {
         DetectedObjects result;
-        float factor = 1 / (float) 8 * (this->size.width / (float) mat.cols);
+        float factor = 1 / (float) CLASSIFY_FACTOR / (this->size.width / (float) mat.cols);
         Size fullscreenThreshold = Size((int)(this->size.width * factor), (int)(this->size.height * factor));
         bool classifyFullscreen = false;
 
-        for (list<Rect>::iterator it = rects.begin(); it != rects.end(); ++it)
+        for (list<Rect>::iterator it = rects.begin(); it != rects.end();)
         {
             Rect r = *it;
 
@@ -189,7 +194,8 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
             {
                 it = rects.erase(it);
                 classifyFullscreen = true;
-            }
+            } else
+                ++it;
         }
 
         if (classifyFullscreen)
@@ -212,7 +218,7 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
             }
 
             uint minX2 = x1 + this->size.width, minY2 = y1 + this->size.height;
-            uint maxX2 = x1 + this->size.width * 8 calcular aqui! a ideia eh pegar o maximo de objetos em que o menor seja 1/8;
+            uint maxX2 = x1 + this->size.width * CLASSIFY_FACTOR, maxY2 = y1 + this->size.height * CLASSIFY_FACTOR; // a ideia eh pegar o maximo de objetos em que o menor seja 1/8;
             uint x2 = 0, y2 = 0;
 
             // Let's classify every object in the viewport.
@@ -220,10 +226,12 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
             {
                 Rect r = *it;
 
-                if (r.x >= x1 && r.x + r.width <= minX2 && r.y >= y1 && r.y + r.height <= minY2)
+                if (r.x >= x1 && r.x + r.width <= maxX2 && r.y >= y1 && r.y + r.height <= maxY2)
                 {
                     x2 = x2 > r.x + r.width ? x2 : r.x + r.width;
                     y2 = y2 > r.y + r.height ? y2 : r.y + r.height;
+                    minX2 = std::max(minX2, (uint) r.x + r.width);
+                    minY2 = std::max(minY2, (uint) r.y + r.height);
                     it = rects.erase(it);
                 } else {
                     ++it;

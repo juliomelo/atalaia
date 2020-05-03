@@ -4,14 +4,18 @@
 #include <iostream>
 #include <opencv2/highgui.hpp>
 
+#define KEEP_PACKAGES_AFTER_KEYFRAME
+
 using namespace std;
 
 int Record::sequence = 0;
 
-MotionRecorder::MotionRecorder(VideoStream *stream)
+MotionRecorder::MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds)
 {
     shutdown = false;
     this->stream = stream;
+    this->notifier = notifier;
+    this->maxSeconds = maxSeconds;
     thread = new std::thread(threadProcess, this);
 }
 
@@ -27,10 +31,9 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
     std::list<AVPacket *> packetsFromKeyFrame;
     Record *record = NULL;
     int64_t dontStopUntil = 0;
+    int64_t videoTimeThreshold = 0;
     int64_t lastKeyFrame = 0;
     std::list<AVPacket *> waitingMovement;
-
-    Record *teste = NULL;
 
     do
     {
@@ -54,6 +57,10 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
             packetsFromKeyFrame.clear();
             lastKeyFrame = item->packet->pts;
+
+#ifndef KEEP_PACKAGES_AFTER_KEYFRAME
+        packetsFromKeyFrame.push_back(av_packet_clone(item->packet));
+#endif
         }
 
         if (!movements.empty())
@@ -63,12 +70,15 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
                  polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
             }
 
-            imshow("movements", item->mat);
-            waitKey(25);
-            dontStopUntil = item->packet->pts + 5.0 / (item->time_base.num / (float)item->time_base.den);
+            // Mat show;
+            // resize(item->mat, show, Size(640, 480));
+            // imshow("movements", show);
+            // waitKey(25);
+            dontStopUntil = item->packet->pts + 3.0 / (item->time_base.num / (float)item->time_base.den);
 
             if (!record)
             {
+                videoTimeThreshold = item->packet->pts + recorder->maxSeconds / (item->time_base.num / (float)item->time_base.den);
                 record = new Record(recorder->stream->getAVStream());
 
                 for (list<AVPacket *>::iterator it = packetsFromKeyFrame.begin(); it != packetsFromKeyFrame.end(); ++it)
@@ -86,13 +96,19 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
             record->writePacket(item->packet, &movements);
         }
 
+#ifdef KEEP_PACKAGES_AFTER_KEYFRAME
         packetsFromKeyFrame.push_back(av_packet_clone(item->packet));
+#endif
 
-        if (!item->mat.empty() && movements.empty() && item->packet->pts >= dontStopUntil)
+        if (record && ((!item->mat.empty() && movements.empty() && item->packet->pts >= dontStopUntil) || (item->packet->flags & AV_PKT_FLAG_KEY && item->packet->pts >= videoTimeThreshold)))
         {
+            string filename = record->getFileName();
             delete record;
             record = NULL;
             waitingMovement.clear();
+
+            if (recorder->notifier)
+                recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
         }
         else if (record && movements.empty())
             waitingMovement.push_back(av_packet_clone(item->packet));
@@ -101,10 +117,12 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
     } while (!recorder->shutdown);
 
     if (record)
+    {
+        string filename = record->getFileName();
         delete record;
-
-    if (teste)
-        delete teste;
+        if (recorder->notifier)
+            recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
+    }
 }
 
 Record::Record(AVStream *i_video_stream)
@@ -145,6 +163,8 @@ Record::Record(AVStream *i_video_stream)
 
 Record::~Record()
 {
+    cout << "Closing file: " << filename << "\n";
+    
     fclose(this->data);
 
     av_write_trailer(o_fmt_ctx);
@@ -192,9 +212,15 @@ MotionRecordReader::MotionRecordReader(string filename) : queue(1)
     this->fMovements = fopen(movementsFilename.c_str(), "r");
 }
 
-bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements &movementsDst)
+MotionRecordReader::~MotionRecordReader()
 {
-    unsigned long nMovements;
+    fclose(this->fMovements);
+    this->queue.close();
+}
+
+bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements *&movementsDst)
+{
+    unsigned long nMovements = 0;
 
     do
     {
@@ -207,23 +233,30 @@ bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements &move
         if (!item)
             return false;
 
-        fread(&nMovements, sizeof(unsigned long), 1, this->fMovements);
-
-        for (int i = 0; i < nMovements; i++)
+        if (!item->mat.empty())
         {
-            unsigned long nPoints;
-            fread(&nPoints, sizeof(unsigned long), 1, this->fMovements);
-            vector<Point> contour(nPoints);
+            fread(&nMovements, sizeof(unsigned long), 1, this->fMovements);
+            movementsDst = new DetectedMovements(nMovements);
 
-            for (unsigned long j = 0; j < nPoints; j++)
+            for (int i = 0; i < nMovements; i++)
             {
-                Point point;
-                fread(&point, sizeof(Point), 1, this->fMovements);
-                contour.push_back(point);
-            }
+                unsigned long nPoints;
+                fread(&nPoints, sizeof(unsigned long), 1, this->fMovements);
+                vector<Point> contour(nPoints);
 
-            movementsDst.push_back(contour);
+                for (unsigned long j = 0; j < nPoints; j++)
+                {
+                    Point point;
+                    fread(&point, sizeof(Point), 1, this->fMovements);
+                    contour.push_back(point);
+                }
+
+                movementsDst->push_back(DetectedMovement(contour));
+            }
         }
+
+        if (nMovements == 0)
+            delete item;
     } while (nMovements == 0);
 
     return true;

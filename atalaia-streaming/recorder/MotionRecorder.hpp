@@ -4,30 +4,33 @@
 #include <thread>
 #include <list>
 #include "MovementDetector.hpp"
+#include "../notify/Notify.hpp"
 
 using namespace std;
 
 class MotionRecorder
 {
     public:
-        MotionRecorder(VideoStream *stream);
+        MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds = 5);
         ~MotionRecorder();
 
     private:
         VideoStream *stream;
         std::thread *thread;
         bool shutdown;
+        int maxSeconds;
 
-        static void
-        threadProcess(MotionRecorder *recorder);
+        static void threadProcess(MotionRecorder *recorder);
         std::string newFileName();
+        Notifier *notifier;
+
 };
 
 class Record
 {
     public:
         Record(AVStream *i_video_stream);
-        ~Record();
+        virtual ~Record();
         std::string getFileName();
         void writePacket(AVPacket *packet, DetectedMovements *movements = NULL);
 
@@ -44,7 +47,8 @@ class MotionRecordReader
 {
     public:
         MotionRecordReader(std::string filename);
-        bool readNext(FrameQueueItem *&item, DetectedMovements &movementsDst);
+        virtual ~MotionRecordReader();
+        bool readNext(FrameQueueItem *&item, DetectedMovements *&movementsDst);
 
     private:
         VideoStream video;

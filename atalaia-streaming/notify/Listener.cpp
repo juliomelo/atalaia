@@ -11,6 +11,14 @@ Listener::~Listener()
     this->thread = NULL;
 }
 
+void Listener::waitShutdown(bool close)
+{
+    if (close)
+        this->queue.close();
+
+    this->queue.waitShutdown();
+}
+
 void Listener::threadProcess(Listener *listener)
 {
     while (listener->thread) {
@@ -21,4 +29,6 @@ void Listener::threadProcess(Listener *listener)
 
         listener->process(file);
     }
+
+    listener->queue.close();
 }
