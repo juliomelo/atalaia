@@ -16,12 +16,14 @@ class DetectedObject
             this->confidence = confidence;
             this->box = box;
             this->missCount = 0;
+            this->id = 0;
         }
 
         std::string type;
         float confidence;
         Rect box;
         int missCount;
+        unsigned int id;
 };
 
 typedef std::vector<DetectedObject> DetectedObjects;

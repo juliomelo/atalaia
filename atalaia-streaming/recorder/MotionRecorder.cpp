@@ -22,6 +22,7 @@ MotionRecorder::MotionRecorder(VideoStream *stream, Notifier *notifier, int maxS
 MotionRecorder::~MotionRecorder()
 {
     shutdown = true;
+    this->thread->detach();
     delete this->thread;
 }
 
@@ -130,10 +131,8 @@ Record::Record(AVStream *i_video_stream)
     this->i_video_stream = i_video_stream;
     std::ostringstream ss;
 
-    ss << "data/repo/" << sequence++ << ".atalaia";
+    ss << "data/local/" << sequence++ << ".atalaia";
     filename = ss.str();
-
-    cout << "New file: " << filename << "\n";
 
     string video = filename + ".mp4";
     string data = filename + ".movements";
@@ -163,8 +162,6 @@ Record::Record(AVStream *i_video_stream)
 
 Record::~Record()
 {
-    cout << "Closing file: " << filename << "\n";
-    
     fclose(this->data);
 
     av_write_trailer(o_fmt_ctx);

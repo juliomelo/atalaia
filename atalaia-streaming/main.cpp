@@ -58,10 +58,17 @@ int main(int argc, char **argv)
 		recorder[i] = new MotionRecorder(stream[i], &notifier);
 	}
 
-	cout << "Wainting " << argc  << " streaming to finish.\n";
+	cout << "Waiting " << argc  << " streaming to finish.\n";
 
 	for (int i = 0; i < argc - 1; i++)
 		queue[i]->waitShutdown();
+
+	for (int i = 0; i < argc - 1; i++)
+	{
+		delete recorder[i];
+		delete stream[i];
+		delete queue[i];
+	}
 
 	cout << "Wainting " << argc  << " object recorder to finish.\n";
 

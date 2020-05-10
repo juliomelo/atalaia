@@ -7,8 +7,10 @@ Listener::Listener() : queue(0, string(""))
 
 Listener::~Listener()
 {
-    delete this->thread;
+    this->queue.close();
+    this->queue.waitShutdown();
     this->thread = NULL;
+    delete this->thread;
 }
 
 void Listener::waitShutdown(bool close)

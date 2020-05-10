@@ -5,7 +5,7 @@ RUN apt update && apt install -y \
     libavfilter7 libavformat58 libavresample4 libavutil56 libpostproc55 libswscale5 \
     ccache yasm \
     libdc1394-utils libv4l2rds0 liblapacke libatlas3-base libopenblas-base liblapack3 \
-    libgstreamer1.0-0 libgstreamer-plugins-base1.0
+    libgstreamer1.0-0 libgstreamer-plugins-base1.0 \
     libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module
 
 ###
@@ -80,7 +80,7 @@ RUN make -j
 # Final
 FROM base as final
 
-COPY --from=opencv /usr/opencv/local/lib/* /usr/local/lib
+COPY --from=opencv /usr/opencv/ /usr/
 RUN mkdir /data/local
 COPY --from=ia /data /data
 COPY --from=build /usr/src/atalaia/build/atalaia-streaming/atalaia-streaming /usr/local/bin
