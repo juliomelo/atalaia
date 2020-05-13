@@ -1,0 +1,19 @@
+version: "3.4"
+services:
+    atalaia-devcontainer:
+        build:
+            context: ..
+            target: devcontainer
+        image: brjuliomelo/atalaia-devcontainer
+        cap_add:
+            - SYS_PTRACE
+        security_opt:
+            - seccomp:unconfined
+        command: /bin/sh -c "while sleep 1000; do :; done"
+        volumes:
+            # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
+            # mounts are relative to the first file in the list, which is a level up.
+            - ..:/workspace:cached
+
+    rabbitmq:
+        image: rabbitmq:3.8.3-alpine

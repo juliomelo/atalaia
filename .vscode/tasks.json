@@ -6,7 +6,7 @@
         {
             "label": "Make",
             "type": "shell",
-            "command": "cmake -S . -B build && cd build && make",
+            "command": "cmake --build /workspace/build --config Debug",
             "group": {
                 "kind": "build",
                 "isDefault": true

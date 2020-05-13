@@ -7,6 +7,7 @@ RUN apt update && apt install -y \
     libdc1394-utils libv4l2rds0 liblapacke libatlas3-base libopenblas-base liblapack3 \
     libgstreamer1.0-0 libgstreamer-plugins-base1.0 \
     libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module
+#    libssh-4
 
 ###
 # IA
@@ -58,17 +59,22 @@ WORKDIR /usr/src/opencv/build
 RUN make -j4 install || make install
 
 ###
+# Atalaia build-base
+FROM buildbase as atalaiaBuildBase
+RUN apt install -y libssh-dev
+
+###
 # DevContainer
-FROM buildbase as devcontainer
-COPY --from=opencv /usr/opencv/ /usr/
+FROM atalaiaBuildBase as devcontainer
 RUN apt install -y git vim less gdb
+COPY --from=opencv /usr/opencv/ /usr/
 COPY --from=ia /data /data
 
 ###
 # Build
-FROM buildbase as build
-
+FROM atalaiaBuildBase as build
 COPY --from=opencv /usr/opencv/ /usr/
+
 WORKDIR /usr/src/atalaia
 COPY . .
 RUN cmake -S . -B build
@@ -80,8 +86,8 @@ RUN make -j
 # Final
 FROM base as final
 
-COPY --from=opencv /usr/opencv/ /usr/
-RUN mkdir /data/local
+COPY --from=opencv /usr/opencv/lib/ /usr/
+RUN mkdir -p /data/local
 COPY --from=ia /data /data
 COPY --from=build /usr/src/atalaia/build/atalaia-streaming/atalaia-streaming /usr/local/bin
 WORKDIR /data

@@ -11,6 +11,7 @@
 #include "recorder/MotionRecorder.hpp"
 #include "recorder/ObjectRecorder.hpp"
 #include <thread>
+#include "notify/amqp/AMQPNotifier.hpp"
 
 extern "C"
 {
@@ -48,7 +49,8 @@ int main(int argc, char **argv)
 	VideoStreamQueue *queue[argc - 1];
 	VideoStream *stream[argc - 1];
 	MotionRecorder *recorder[argc - 1];
-	LocalNotifier notifier(&objRecorder);
+	//LocalNotifier notifier(&objRecorder);
+	AMQPNotifier notifier("amqp://rabbitmq");
 
 	for (int i = 0; i < argc - 1; i++)
 	{
@@ -63,6 +65,8 @@ int main(int argc, char **argv)
 	for (int i = 0; i < argc - 1; i++)
 		queue[i]->waitShutdown();
 
+	cout << "Deleting..." << endl;
+	
 	for (int i = 0; i < argc - 1; i++)
 	{
 		delete recorder[i];

@@ -22,7 +22,7 @@ MotionRecorder::MotionRecorder(VideoStream *stream, Notifier *notifier, int maxS
 MotionRecorder::~MotionRecorder()
 {
     shutdown = true;
-    this->thread->detach();
+    this->thread->join();
     delete this->thread;
 }
 

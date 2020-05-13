@@ -245,6 +245,7 @@ VideoStream::~VideoStream()
     if (this->thread)
     {
         this->threadState = SHUTDOWN;
+        this->thread->join();
         delete this->thread;
     }
 }
