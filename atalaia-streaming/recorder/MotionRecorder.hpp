@@ -41,6 +41,9 @@ class Record
         AVStream *o_video_stream;
         FILE *data;
         std::string filename;
+        int64_t frames;
+        int64_t first_pts;
+        int64_t first_dts;
 };
 
 class MotionRecordReader

@@ -128,6 +128,7 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
 Record::Record(AVStream *i_video_stream)
 {
+    this->frames = 0;
     this->i_video_stream = i_video_stream;
     std::ostringstream ss;
 
@@ -179,12 +180,19 @@ std::string Record::getFileName()
 
 void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
 {
+    if (this->frames++ == 0)
+    {
+        this->first_pts = packet->pts;
+        this->first_dts = packet->dts;
+    }
+
     AVPacket *outPacket = av_packet_clone(packet);
-    outPacket->pts = av_rescale_q_rnd(outPacket->pts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-    outPacket->dts = av_rescale_q_rnd(outPacket->dts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    outPacket->pts = av_rescale_q_rnd(outPacket->pts - first_pts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    outPacket->dts = av_rescale_q_rnd(outPacket->dts - first_dts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
     outPacket->duration = av_rescale_q(outPacket->duration, this->i_video_stream->time_base, this->o_video_stream->time_base);
     outPacket->pos = -1;
-    av_interleaved_write_frame(o_fmt_ctx, outPacket);
+    //av_interleaved_write_frame(o_fmt_ctx, outPacket);
+    av_write_frame(o_fmt_ctx, outPacket);
 
     unsigned long nMovements = movements ? movements->size() : 0;
     fwrite(&nMovements, sizeof(unsigned long), 1, this->data);
