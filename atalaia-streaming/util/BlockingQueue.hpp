@@ -19,7 +19,7 @@ private:
     T closedObject;
 
 public:
-    BlockingQueue(size_t max = 0, T closedObject = NULL)
+    BlockingQueue(size_t max = 30 * 5, T closedObject = NULL)
     {
         this->max = max;
         this->closed = false;

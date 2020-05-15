@@ -7,7 +7,7 @@ LocalNotifier::LocalNotifier(Listener *movements)
     this->movements = movements;
 }
 
-void LocalNotifier::notify(string filename, NotifyEvent event)
+void LocalNotifier::notify(string filename, NotifyEvent event, string arg)
 {
     switch (event)
     {

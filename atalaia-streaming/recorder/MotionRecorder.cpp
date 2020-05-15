@@ -71,10 +71,10 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
                  polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
             }
 
-            // Mat show;
-            // resize(item->mat, show, Size(640, 480));
-            // imshow("movements", show);
-            // waitKey(25);
+//            Mat show;
+//            resize(item->mat, show, Size(640, 480));
+//            imshow("movements", show);
+//            waitKey(25);
             dontStopUntil = item->packet->pts + 3.0 / (item->time_base.num / (float)item->time_base.den);
 
             if (!record)
@@ -131,7 +131,7 @@ Record::Record(AVStream *i_video_stream)
     this->i_video_stream = i_video_stream;
     std::ostringstream ss;
 
-    ss << "data/local/" << sequence++ << ".atalaia";
+    ss << "/data/local/" << sequence++ << ".atalaia";
     filename = ss.str();
 
     string video = filename + ".mp4";

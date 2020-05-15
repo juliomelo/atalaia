@@ -15,7 +15,7 @@ enum NotifyEvent
 class Notifier
 {
     public:
-        virtual void notify(string filename, NotifyEvent event) = 0;
+        virtual void notify(string filename, NotifyEvent event, string arg = "") = 0;
 };
 
 class LocalNotifier : public Notifier
@@ -26,5 +26,5 @@ class LocalNotifier : public Notifier
     private:
         Listener *movements;
         //Listener objects;
-        virtual void notify(string filename, NotifyEvent event);
+        virtual void notify(string filename, NotifyEvent event, string arg = "");
 };

@@ -7,10 +7,12 @@
 class ObjectRecorder : public Listener
 {
     public:
+        ObjectRecorder(Notifier *notifier) : notifier(notifier) {}
         virtual void process(string file);
         
     private:
         YoloV3ObjectDetector objectDetector;
+        Notifier *notifier;
 };
 
 class FollowedObject : public DetectedObject

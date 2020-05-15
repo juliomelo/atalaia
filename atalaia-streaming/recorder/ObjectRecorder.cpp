@@ -1,6 +1,7 @@
 #include "ObjectRecorder.hpp"
 #include <opencv2/tracking/tracker.hpp>
 #include <opencv2/highgui.hpp>
+#include <set>
 
 using namespace cv;
 
@@ -137,6 +138,7 @@ void ObjectRecorder::process(string file)
     MultiTracker *multiTracker = NULL;
     DetectedObjects knownObjects;
     unsigned int objectCount = 0;
+    std::set<string> objectTypes;
 
     cout << "Processing " << file << "\n";
 
@@ -174,15 +176,21 @@ void ObjectRecorder::process(string file)
                 rectangle(frame->mat, Point(obj->box.x, top),
                             Point(obj->box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
                 putText(frame->mat, label, Point(obj->box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
+
+                if (objectTypes.count(obj->type) == 0)
+                {
+                    objectTypes.insert(obj->type);
+                    this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
+                }
             }
 
             if (knownObjects.size() > 0) {
                 cout << "---" << "\n";
-                //Mat show;
-                //resize(frame->mat, show, Size(640, 480));
-                //imshow("objects", show);
-                imshow("objects", frame->mat);
-                waitKey(500);
+                Mat show;
+                resize(frame->mat, show, Size(640, 480));
+                imshow("objects", show);
+                //imshow("objects", frame->mat);
+                waitKey(25);
             }
         }
 

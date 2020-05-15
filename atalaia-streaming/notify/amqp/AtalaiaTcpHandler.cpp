@@ -5,6 +5,8 @@
 
 void AtalaiaTcpHandler::read()
 {
+    this->reading = true;
+    
     struct timeval tv
     {
         1, 0
@@ -19,4 +21,6 @@ void AtalaiaTcpHandler::read()
         std::cerr << "Socket error" << std::endl;
     else if (result > 0 && FD_ISSET(this->fd, &this->set))
         this->connection->process(this->fd, this->flags);
+
+    this->reading = false;
 }

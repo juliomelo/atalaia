@@ -30,6 +30,7 @@ private:
     {
         // report error
         std::cerr << "AMQP TCPConnection error: " << message << std::endl;
+        exit(-2);
     }
 
     /**
@@ -51,6 +52,8 @@ private:
     {
         std::cout << "amqp monitor - fd: " << fd << "; flags: " << flags << std::endl;
 
+        this->connection = connection;
+
         if (flags == 0)
             return;
 
@@ -67,6 +70,7 @@ public:
     int flags = 0;
     fd_set set;
     AMQP::TcpConnection *connection;
+    bool reading;
 
     void read();
 };

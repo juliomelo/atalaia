@@ -21,10 +21,12 @@ AMQPNotifier::AMQPNotifier(std::string url)
 
     channel->declareQueue(getKey(NotifyEvent::MOVEMENT), AMQP::durable).onError([](const char *message) {
         std::cerr << "Cannot declare queue \"movement\": " << message << std::endl;
+        exit(-1);
     });
 
-    channel->declareQueue(getKey(NotifyEvent::OBJECT), AMQP::durable).onError([](const char *message) {
-        std::cerr << "Cannot declare queue \"movement\": " << message << std::endl;
+    channel->declareExchange(getKey(NotifyEvent::OBJECT), AMQP::ExchangeType::direct).onError([](const char *message) {
+        std::cerr << "Cannot declare exchange \"object\": " << message << std::endl;
+        exit(-1);
     });
 }
 
@@ -34,8 +36,23 @@ AMQPNotifier::~AMQPNotifier()
     delete this->connection;
 }
 
-void AMQPNotifier::notify(std::string filename, NotifyEvent event)
+void AMQPNotifier::notify(std::string filename, NotifyEvent event, std::string arg)
 {
-    channel->publish("", getKey(event), filename);
-    connection->process(this->handler.fd, this->handler.flags);
+    std::string key = getKey(event);
+
+    cout << "[+] Notify: " << filename << " " << key << " " << arg << endl;
+
+    switch (event)
+    {
+        case NotifyEvent::MOVEMENT:
+            channel->publish("", key, filename);
+            break;
+
+        case NotifyEvent::OBJECT:
+            channel->publish(key, arg, filename);
+            break;
+    }
+
+    if (!this->handler.reading)
+        connection->process(this->handler.fd, this->handler.flags);
 }

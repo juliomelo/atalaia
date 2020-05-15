@@ -66,7 +66,7 @@ RUN apt install -y libssh-dev
 ###
 # DevContainer
 FROM atalaiaBuildBase as devcontainer
-RUN apt install -y git vim less gdb
+RUN apt install -y git vim less gdb amqp-tools
 COPY --from=opencv /usr/opencv/ /usr/
 COPY --from=ia /data /data
 
@@ -86,8 +86,8 @@ RUN make -j
 # Final
 FROM base as final
 
-COPY --from=opencv /usr/opencv/lib/ /usr/
 RUN mkdir -p /data/local
+COPY --from=opencv /usr/opencv/ /usr/
 COPY --from=ia /data /data
 COPY --from=build /usr/src/atalaia/build/atalaia-streaming/atalaia-streaming /usr/local/bin
 WORKDIR /data
