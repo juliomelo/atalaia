@@ -2,6 +2,7 @@
 #include <opencv2/tracking/tracker.hpp>
 #include <opencv2/highgui.hpp>
 #include <set>
+#include <stdio.h>
 
 using namespace cv;
 
@@ -132,70 +133,82 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
 
 void ObjectRecorder::process(string file)
 {
-    MotionRecordReader reader(file);
-    FrameQueueItem *frame = NULL;
-    DetectedMovements *movements;
-    MultiTracker *multiTracker = NULL;
-    DetectedObjects knownObjects;
-    unsigned int objectCount = 0;
-    std::set<string> objectTypes;
-
     cout << "Processing " << file << "\n";
 
-    while (reader.readNext(frame, movements))
+    std::set<string> objectTypes;
+
     {
-        list<Rect> rects(movements->begin(), movements->end());
-        DetectedObjects newObjects = objectDetector.classifyFromMovements(frame->mat, rects);
+        MotionRecordReader reader(file);
+        FrameQueueItem *frame = NULL;
+        DetectedMovements *movements;
+        MultiTracker *multiTracker = NULL;
+        DetectedObjects knownObjects;
+        unsigned int objectCount = 0;
 
-        if (multiTracker == NULL && !newObjects.empty())
+        while (reader.readNext(frame, movements))
         {
-            multiTracker = new MultiTracker();
-            multiTracker->update(frame->mat);
-        }
+            list<Rect> rects(movements->begin(), movements->end());
+            DetectedObjects newObjects = objectDetector.classifyFromMovements(frame->mat, rects);
 
-        if (multiTracker != NULL)
-        {
-            multiTracker->update(frame->mat);
-            trackObjects(newObjects, knownObjects, multiTracker, frame->mat);
-        
-            for (int i = 0; i < knownObjects.size(); i++) {
-                DetectedObject *obj = &knownObjects[i];
+            if (multiTracker == NULL && !newObjects.empty())
+            {
+                multiTracker = new MultiTracker();
+                multiTracker->update(frame->mat);
+            }
 
-                if (obj->id == 0)
-                    obj->id = ++objectCount;
+            if (multiTracker != NULL)
+            {
+                multiTracker->update(frame->mat);
+                trackObjects(newObjects, knownObjects, multiTracker, frame->mat);
+            
+                for (int i = 0; i < knownObjects.size(); i++) {
+                    DetectedObject *obj = &knownObjects[i];
 
-                rectangle(frame->mat, obj->box, obj->missCount > 0 ? Scalar(0, 0, 255) : Scalar(0, 255, 0));
+                    if (obj->id == 0)
+                        obj->id = ++objectCount;
 
-                std::string label = format("Obj %d: %s (c: %f; m: %d)", obj->id, obj->type.c_str(), obj->confidence, obj->missCount);
-                cout << label << " Rect: [" << obj->box.x << ", " << obj->box.y << "; " << obj->box.x + obj->box.width << ", " << obj->box.y + obj->box.height << "]\n";
+                    rectangle(frame->mat, obj->box, obj->missCount > 0 ? Scalar(0, 0, 255) : Scalar(0, 255, 0));
 
-                int baseLine;
-                Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+                    std::string label = format("Obj %d: %s (c: %f; m: %d)", obj->id, obj->type.c_str(), obj->confidence, obj->missCount);
+                    cout << label << " Rect: [" << obj->box.x << ", " << obj->box.y << "; " << obj->box.x + obj->box.width << ", " << obj->box.y + obj->box.height << "]\n";
 
-                int top = std::max((int)obj->box.y, labelSize.height);
-                rectangle(frame->mat, Point(obj->box.x, top),
-                            Point(obj->box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
-                putText(frame->mat, label, Point(obj->box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
+                    int baseLine;
+                    Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 
-                if (objectTypes.count(obj->type) == 0)
-                {
-                    objectTypes.insert(obj->type);
-                    this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
+                    int top = std::max((int)obj->box.y, labelSize.height);
+                    rectangle(frame->mat, Point(obj->box.x, top),
+                                Point(obj->box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
+                    putText(frame->mat, label, Point(obj->box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
+
+                    if (objectTypes.count(obj->type) == 0)
+                    {
+                        objectTypes.insert(obj->type);
+                        this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
+                    }
+                }
+
+                if (knownObjects.size() > 0) {
+                    cout << "---" << "\n";
+                    Mat show;
+                    resize(frame->mat, show, Size(640, 480));
+                    imshow("objects", show);
+                    //imshow("objects", frame->mat);
+                    waitKey(25);
                 }
             }
 
-            if (knownObjects.size() > 0) {
-                cout << "---" << "\n";
-                Mat show;
-                resize(frame->mat, show, Size(640, 480));
-                imshow("objects", show);
-                //imshow("objects", frame->mat);
-                waitKey(25);
-            }
+            delete frame;
+            delete movements;
         }
+    }
 
-        delete frame;
-        delete movements;
+    if (objectTypes.size() == 0)
+    {
+        string mp4 = file + ".mp4";
+        string movements = file + ".movements";
+
+        remove(mp4.c_str());
+        remove(movements.c_str());
     }
 
     cout << "Processed " << file << "\n";
