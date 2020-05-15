@@ -47,8 +47,8 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
             int best = -1;
 
             for (int iObj = 0; iObj < nTracked; iObj++)
-                if (matchAreaMatrix(iNew, iObj, 0) > matchAreaMatrix(iNew, best, 0) && newObjects[iNew].type == lastObjects[iObj].type)
-                    best = iNew;
+                if (newObjects[iNew].type == lastObjects[iObj].type && ((best == -1 && matchAreaMatrix(iNew, iObj, 0) > 0) || matchAreaMatrix(iNew, iObj, 0) > matchAreaMatrix(iNew, best, 0)))
+                    best = iObj;
 
             bestForNew[iNew] = best;
         }
@@ -85,7 +85,7 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
 
     // Remove lost objects.
     for (int i = nTracked - 1; i >= 0; i--)
-        if (!matchesTracked[i] && ++(lastObjects[i].missCount) > 30)
+        if (!matchesTracked[i] && ++(lastObjects[i].missCount) > 90)
         {
             lastObjects.erase(lastObjects.begin() + i);
             removedSome = true;
@@ -125,7 +125,7 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
             if (!matchesNew[i] && newObjects[i].confidence >= .6)
             {
                 lastObjects.push_back(newObjects[i]);
-                tracker->add(TrackerKCF::create(), mat, lastObjects[i].box);
+                tracker->add(TrackerKCF::create(), mat, newObjects[i].box);
             }
         }
     }
@@ -192,7 +192,7 @@ void ObjectRecorder::process(string file)
                     Mat show;
                     resize(frame->mat, show, Size(640, 480));
                     imshow("objects", show);
-                    //imshow("objects", frame->mat);
+                    // imshow("objects", frame->mat);
                     waitKey(25);
                 }
             }
