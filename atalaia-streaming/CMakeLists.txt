@@ -3,6 +3,8 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
+set(CMAKE_CXX_STANDARD 17)
+
 # Adicione a origem ao executável deste projeto.
 #add_executable (atalaia-Streaming "Atalaia-Streaming.cpp" "Atalaia-Streaming.h")
 
@@ -64,5 +66,5 @@ set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl")
 add_dependencies(atalaia-streaming ${DEPENDENCIES})
 
 target_include_directories(atalaia-streaming PRIVATE ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR} ${OPENCV_INCLUDE_DIR} ${AMQPCPP_INCLUDE_DIR})
-target_link_libraries(atalaia-streaming PRIVATE ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} ${OpenCV_LIBS} ${SWSCALE_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${LIBS})
+target_link_libraries(atalaia-streaming PRIVATE stdc++fs ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} ${OpenCV_LIBS} ${SWSCALE_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${LIBS})
 

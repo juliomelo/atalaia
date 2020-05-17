@@ -19,6 +19,7 @@ extern "C"
 }
 
 #include <fstream>
+#include <filesystem>
 
 using namespace cv;
 using namespace std;
@@ -101,7 +102,12 @@ int monitorObjects(int argc, char **argv)
 		notifier.getChannel()->consume("movement").onReceived([&notifier, &recorder](const AMQP::Message &message, uint64_t deliveryTag, bool redelivered) {
 			string file(message.body(), message.bodySize());
 			cout << "Received message: " << file << endl;
-			recorder.process(file);
+
+			if (std::filesystem::exists(file + ".mp4") && std::filesystem::exists(file + ".movements"))
+				recorder.process(file);
+			else
+				cerr << "File does not exist: " << file << endl;
+
 			notifier.getChannel()->ack(deliveryTag);
 		});
 
