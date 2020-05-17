@@ -43,8 +43,8 @@ class ObjectDetector
         Net net;
         std::vector<std::string> classes;
         std::vector<String> outNames;
-        std::vector<int> outLayers = net.getUnconnectedOutLayers();
-        std::string outLayerType = net.getLayer(outLayers[0])->type;
+        std::vector<int> outLayers;
+        std::string outLayerType;
         double confThreshold;
         double nmsThreshold;
 
@@ -55,5 +55,5 @@ class ObjectDetector
 class YoloV3ObjectDetector : public ObjectDetector
 {
     public:
-        YoloV3ObjectDetector(string modelPath = "/data/yolo/yolov3-tiny.weights", string configPath = "/data/yolo/yolov3-tiny.cfg", string classesPath = "/data/yolo/coco.names", int width = 416, int height = 416); // yolov3 - tiny uses 416x416 images
+        YoloV3ObjectDetector(string modelPath = "data/yolo/yolov3-tiny.weights", string configPath = "data/yolo/yolov3-tiny.cfg", string classesPath = "data/yolo/coco.names", int width = 416, int height = 416); // yolov3 - tiny uses 416x416 images
 };
