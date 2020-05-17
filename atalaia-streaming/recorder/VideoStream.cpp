@@ -150,7 +150,7 @@ void VideoStream::threadProcess(VideoStream *data)
     AVPacket packet;
     av_init_packet(&packet);
 
-    while (data->threadState == PROCESSING && av_read_frame(data->format_ctx, &packet) >= 0)
+    while (!terminating && data->threadState == PROCESSING && av_read_frame(data->format_ctx, &packet) >= 0)
     {
         now = current_timestamp();
 

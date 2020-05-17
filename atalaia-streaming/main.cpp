@@ -1,11 +1,5 @@
-﻿// #include <stdio.h>
-// #include <stdlib.h>
+﻿#include "main.hpp"
 #include <iostream>
-// #include <fstream>
-// #include <sstream>
-// #include <unistd.h>
-// #include <sys/time.h>
-// #include "MovementDetector.hpp"
 #include "util/BlockingQueue.hpp"
 #include "recorder/VideoStream.hpp"
 #include "recorder/MotionRecorder.hpp"
@@ -20,6 +14,7 @@ extern "C"
 
 #include <fstream>
 #include <filesystem>
+#include <signal.h>
 
 using namespace cv;
 using namespace std;
@@ -108,10 +103,11 @@ int monitorObjects(int argc, char **argv)
 			else
 				cerr << "File does not exist: " << file << endl;
 
-			notifier.getChannel()->ack(deliveryTag);
+			if (!terminating)
+				notifier.getChannel()->ack(deliveryTag);
 		});
 
-		while (true)
+		while (!terminating && true)
 			notifier.getHandler()->read();
 	}
 	else
@@ -123,6 +119,14 @@ int monitorObjects(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+bool terminating = false;
+
+void terminate(int signum)
+{
+	cout << "Received SIGTERM" << endl;
+	terminating = true;
 }
 
 int main(int argc, char **argv)
@@ -137,6 +141,13 @@ int main(int argc, char **argv)
 		cerr << "Sintax: atalaia-streaming <command> [args]" << endl;
 		return EXIT_FAILURE;
 	}
+
+	struct sigaction sigActionData;
+	memset(&sigActionData, 0, sizeof(struct sigaction));
+	sigActionData.sa_handler = terminate;
+
+	sigaction(SIGTERM, &sigActionData, NULL);
+	sigaction(SIGQUIT, &sigActionData, NULL);
 
 	//av_log_set_level( AV_LOG_DEBUG );
 	av_register_all();
@@ -166,7 +177,7 @@ int main(int argc, char **argv)
 		recorder[i] = new MotionRecorder(stream[i], &notifier);
 	}
 
-	cout << "Waiting " << argc  << " streaming to finish.\n";
+	cout << "Waiting " << argc - 1  << " streaming to finish.\n";
 
 	for (int i = 0; i < argc - 1; i++)
 		queue[i]->waitShutdown();

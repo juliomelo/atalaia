@@ -1,4 +1,5 @@
 #include "Listener.hpp"
+#include "../main.hpp"
 
 Listener::Listener() : queue(0, string(""))
 {
@@ -23,7 +24,7 @@ void Listener::waitShutdown(bool close)
 
 void Listener::threadProcess(Listener *listener)
 {
-    while (listener->thread) {
+    while (!terminating && listener->thread) {
         string file = listener->queue.pop();
 
         if (file.length() == 0)

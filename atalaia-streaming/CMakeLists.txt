@@ -13,7 +13,7 @@ add_compile_options(-Wno-deprecated-declarations)
 
 # TODO: Adicione testes e instale destinos, se necessário.
 add_executable(atalaia-streaming
-    main.cpp
+    main.hpp main.cpp
     util/BlockingQueue.hpp
     recorder/VideoStream.cpp recorder/VideoStream.hpp
     recorder/MovementDetector.cpp recorder/MovementDetector.hpp

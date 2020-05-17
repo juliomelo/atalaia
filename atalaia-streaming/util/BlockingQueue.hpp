@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <deque>
 #include <iostream>
+#include "../main.hpp"
 
 template <typename T>
 class BlockingQueue
@@ -28,14 +29,14 @@ public:
 
     bool try_push(T const &value)
     {
-        if (closed)
+        if (closed || terminating)
             return false;
 
         {
             std::unique_lock<std::mutex> lock(this->_mutex);
 
             if (this->max > 0)
-                this->_condition.wait(lock, [=] { return this->_queue.size() < max; });
+                this->_condition.wait(lock, [=] { return this->_queue.size() < max || closed || terminating; });
                 
             this->_queue.push_front(value);
         }
@@ -50,7 +51,7 @@ public:
         std::unique_lock<std::mutex> lock(this->_mutex);
         this->_condition.wait(lock, [=] { return closed || !this->_queue.empty(); });
 
-        if (closed && this->_queue.empty()) {
+        if (closed && this->_queue.empty() || terminating) {
             return this->closedObject;
         }
 
@@ -64,7 +65,7 @@ public:
     {
         std::unique_lock<std::mutex> lock(this->_mutex);
 
-        if (this->_queue.empty())
+        if (this->_queue.empty() || terminating)
             return false;
 
         T value(std::move(this->_queue.back()));
@@ -83,6 +84,6 @@ public:
     void waitShutdown()
     {
         std::unique_lock<std::mutex> lock(this->_mutex);
-        this->_condition.wait(lock, [=] { return closed && this->_queue.empty(); });
+        this->_condition.wait(lock, [=] { return closed && this->_queue.empty() || terminating; });
     }
 };
