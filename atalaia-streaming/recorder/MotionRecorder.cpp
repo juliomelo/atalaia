@@ -66,15 +66,20 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
         if (!movements.empty())
         {
+
+#ifdef SHOW_MOVEMENT_DETECTION
             for (int i = 0; i < movements.size(); i++)
             {
                  polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
+                 rectangle(item->mat, movements[i], Scalar(255, 0, 0));
             }
 
-//            Mat show;
-//            resize(item->mat, show, Size(640, 480));
-//            imshow("movements", show);
-//            waitKey(25);
+            Mat show;
+            resize(item->mat, show, Size(480, 320));
+            imshow("movement", show);
+            waitKey(25);
+#endif
+
             dontStopUntil = item->packet->pts + 3.0 / (item->time_base.num / (float)item->time_base.den);
 
             if (!record)
@@ -132,7 +137,7 @@ Record::Record(AVStream *i_video_stream)
     this->i_video_stream = i_video_stream;
     std::ostringstream ss;
 
-    ss << "/data/local/" << sequence++ << ".atalaia";
+    ss << "data/local/" << sequence++ << ".atalaia";
     filename = ss.str();
 
     string video = filename + ".mp4";
@@ -180,7 +185,7 @@ std::string Record::getFileName()
 
 void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
 {
-    if (this->frames++ == 0)
+    if (this->frames++ <= 1) // Keyframe and second frame should be considered at time 0.
     {
         this->first_pts = packet->pts;
         this->first_dts = packet->dts;
@@ -253,7 +258,7 @@ bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements *&mov
                 {
                     Point point;
                     fread(&point, sizeof(Point), 1, this->fMovements);
-                    contour.push_back(point);
+                    contour[j] = point;
                 }
 
                 movementsDst->push_back(DetectedMovement(contour));
