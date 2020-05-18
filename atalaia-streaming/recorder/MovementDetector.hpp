@@ -2,14 +2,14 @@
 #define MOVEMENT_DETECTOR_H
 
 #include "opencv2/imgproc.hpp"
-// #include "opencv2/video/background_segm.hpp"
-#include "opencv2/bgsegm.hpp"
+#include "opencv2/video/background_segm.hpp"
+// #include "opencv2/bgsegm.hpp"
 #include <stdio.h>
 #include <string>
 
 using namespace std;
 using namespace cv;
-using namespace cv::bgsegm;
+// using namespace cv::bgsegm;
 
 class DetectedMovement
 {

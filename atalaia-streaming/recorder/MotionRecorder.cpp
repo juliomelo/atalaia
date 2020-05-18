@@ -5,6 +5,7 @@
 #include <opencv2/highgui.hpp>
 
 #define KEEP_PACKAGES_AFTER_KEYFRAME
+// #define SHOW_MOVEMENT_DETECTION
 
 using namespace std;
 
@@ -46,8 +47,8 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
            break;
         }
 
-        //imshow("thread", item->mat);
-        //waitKey(25);
+        // imshow("thread", item->mat);
+        // waitKey(25);
 
         DetectedMovements movements = item->mat.empty() ? DetectedMovements() : movementDetector.detectMovement(item->mat);
 
@@ -66,7 +67,6 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
         if (!movements.empty())
         {
-
 #ifdef SHOW_MOVEMENT_DETECTION
             for (int i = 0; i < movements.size(); i++)
             {
@@ -109,12 +109,25 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
         if (record && ((!item->mat.empty() && movements.empty() && item->packet->pts >= dontStopUntil) || (item->packet->flags & AV_PKT_FLAG_KEY && item->packet->pts >= videoTimeThreshold)))
         {
             string filename = record->getFileName();
+            int64_t duration = record->getDuration();
+            bool keep = duration > 1;
+
             delete record;
             record = NULL;
             waitingMovement.clear();
 
-            if (recorder->notifier)
+            if (recorder->notifier && keep)
                 recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
+            else
+            {
+                cout << "Discarding " << filename << " - duration: " << duration << endl;
+
+                string mp4 = filename + ".mp4";
+                string movementsFilename = filename + ".movements";
+
+                remove(mp4.c_str());
+                remove(movementsFilename.c_str());
+            }
         }
         else if (record && movements.empty())
             waitingMovement.push_back(av_packet_clone(item->packet));
@@ -133,11 +146,15 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
 Record::Record(AVStream *i_video_stream)
 {
+    time_t now;
     this->frames = 0;
     this->i_video_stream = i_video_stream;
+    this->duration = 0;
     std::ostringstream ss;
 
-    ss << "data/local/" << sequence++ << ".atalaia";
+    time(&now);
+
+    ss << "data/local/" << sequence++ << "-" << now << ".atalaia";
     filename = ss.str();
 
     string video = filename + ".mp4";
@@ -198,6 +215,8 @@ void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
     outPacket->pos = -1;
     //av_interleaved_write_frame(o_fmt_ctx, outPacket);
     av_write_frame(o_fmt_ctx, outPacket);
+
+    this->duration = av_rescale_q(outPacket->pts, this->o_video_stream->time_base, {1, 1000}) / 1000.;
 
     unsigned long nMovements = movements ? movements->size() : 0;
     fwrite(&nMovements, sizeof(unsigned long), 1, this->data);
@@ -261,7 +280,8 @@ bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements *&mov
                     contour[j] = point;
                 }
 
-                movementsDst->push_back(DetectedMovement(contour));
+                (*movementsDst)[i] = DetectedMovement(contour);
+                //movementsDst->push_back(DetectedMovement(contour));
             }
         }
 

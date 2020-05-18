@@ -33,6 +33,7 @@ class Record
         virtual ~Record();
         std::string getFileName();
         void writePacket(AVPacket *packet, DetectedMovements *movements = NULL);
+        inline int64_t getDuration() { return duration; }
 
     private:
         static int sequence;
@@ -44,6 +45,7 @@ class Record
         int64_t frames;
         int64_t first_pts;
         int64_t first_dts;
+        int64_t duration;
 };
 
 class MotionRecordReader
