@@ -6,7 +6,7 @@ RUN apt update && apt install -y \
     ccache yasm \
     libdc1394-utils libv4l2rds0 liblapacke libatlas3-base libopenblas-base liblapack3 \
     libgstreamer1.0-0 libgstreamer-plugins-base1.0 \
-    libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module
+    libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module libopenexr23
 #    libssh-4
 
 ###
@@ -42,15 +42,15 @@ RUN apt install -y \
 
 WORKDIR /usr/src
 
-RUN git clone --branch 4.2.0 --depth=1 https://github.com/opencv/opencv.git
-RUN git clone --branch 4.2.0 --depth=1 https://github.com/opencv/opencv_contrib.git
+RUN git clone --branch 4.3.0 --depth=1 https://github.com/opencv/opencv.git
+RUN git clone --branch 4.3.0 --depth=1 https://github.com/opencv/opencv_contrib.git
 
 RUN mkdir opencv/build && \
     cd opencv/build && \
     cmake -D CMAKE_BUILD_TYPE=Release \
           -D CMAKE_INSTALL_PREFIX=/usr/opencv \
           -D OPENCV_GENERATE_PKGCONFIG=ON \
-          -D BUILD_LIST=core,imgproc,dnn,objdetect,video,highgui,face,tracking,videoio \
+          -D BUILD_LIST=core,imgproc,dnn,objdetect,video,highgui,face,tracking,videoio,bgsegm \
           -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
           -D WITH_OPENGL=ON \
           -S .. -B .
@@ -90,6 +90,6 @@ RUN mkdir -p /data/local
 COPY --from=opencv /usr/opencv/ /usr/
 COPY --from=ia /data /data
 COPY --from=build /usr/src/atalaia/build/atalaia-streaming/atalaia-streaming /usr/local/bin
-WORKDIR /data
+WORKDIR /
 ENTRYPOINT ["atalaia-streaming"]
 VOLUME /data/local
