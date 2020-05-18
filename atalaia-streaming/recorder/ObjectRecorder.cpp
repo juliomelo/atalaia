@@ -131,6 +131,28 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
     }
 }
 
+void filterMovements(list<Rect> &movements, vector<Rect2d> trackedObjects, DetectedObjects &knownObjects)
+{
+    for (list<Rect>::iterator it = movements.begin(); it != movements.end(); it++)
+    {
+        Rect movement = *it;
+        int threshold = movement.area() * .99f;
+        int idx = 0;
+
+        for (vector<Rect2d>::iterator itObj = trackedObjects.begin(); itObj != trackedObjects.end(); itObj++, idx++)
+        {
+            Rect r(*itObj);
+
+            if ((movement & r).area() >= threshold && r != knownObjects[idx].box)
+            {
+                it = movements.erase(it);
+                knownObjects[idx].missCount = 0;
+                break;
+            }
+        }
+    }
+}
+
 void ObjectRecorder::process(string file)
 {
     cout << "Processing " << file << "\n";
@@ -148,6 +170,14 @@ void ObjectRecorder::process(string file)
         while (reader.readNext(frame, movements))
         {
             list<Rect> rects(movements->begin(), movements->end());
+
+            // Let's remove movements from tracked objects
+            if (multiTracker != NULL)
+            {
+                multiTracker->update(frame->mat);
+                filterMovements(rects, multiTracker->getObjects(), knownObjects);
+            }
+
             DetectedObjects newObjects = objectDetector.classifyFromMovements(frame->mat, rects);
 
             if (multiTracker == NULL && !newObjects.empty())
@@ -158,7 +188,6 @@ void ObjectRecorder::process(string file)
 
             if (multiTracker != NULL)
             {
-                multiTracker->update(frame->mat);
                 trackObjects(newObjects, knownObjects, multiTracker, frame->mat);
             
                 for (int i = 0; i < knownObjects.size(); i++) {
@@ -183,7 +212,9 @@ void ObjectRecorder::process(string file)
                     if (objectTypes.count(obj->type) == 0)
                     {
                         objectTypes.insert(obj->type);
-                        this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
+
+                        if (this->notifier != NULL)
+                            this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
                     }
                 }
 
