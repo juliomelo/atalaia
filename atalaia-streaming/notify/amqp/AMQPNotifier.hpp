@@ -14,6 +14,7 @@ class AMQPNotifier : public Notifier
         virtual ~AMQPNotifier();
         
         virtual void notify(string filename, NotifyEvent event, std::string arg = "");
+        inline AMQP::TcpConnection *getConnection() { return this->connection; }
         inline AMQP::TcpChannel *getChannel() { return this->channel; }
         inline AtalaiaTcpHandler *getHandler() { return &this->handler; }
 

@@ -36,6 +36,8 @@ int monitorMovements(int argc, char **argv)
 	AMQPNotifier notifier(argv[0]);
 	list<VideoStream *> streams;
 
+	notifier.getHandler()->read();
+
 	if (argc == 3 && strcmp(argv[1], "-f") == 0)
 	{
 		cout << "Monitoring URL's from file " << argv[2] << endl;
@@ -63,6 +65,12 @@ int monitorMovements(int argc, char **argv)
 
 	for (list<VideoStream *>::iterator it = streams.begin(); it != streams.end(); ++it)
 		recorders.push_back(new MotionRecorder(*it, &notifier));
+
+	while (!terminating)
+	{
+		notifier.getConnection()->heartbeat();
+		notifier.getHandler()->read();
+	}
 
 	for (list<VideoStream *>::iterator it = streams.begin(); it != streams.end(); ++it)
 		(*it)->getQueue()->waitShutdown();
@@ -108,7 +116,10 @@ int monitorObjects(int argc, char **argv)
 		});
 
 		while (!terminating && true)
+		{
+			notifier.getConnection()->heartbeat();
 			notifier.getHandler()->read();
+		}
 	}
 	else
 	{
