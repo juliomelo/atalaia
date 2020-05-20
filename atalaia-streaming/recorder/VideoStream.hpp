@@ -24,6 +24,7 @@ class FrameQueueItem
         AVPacket *packet;
         cv::Mat mat;
         AVRational time_base;
+        unsigned int frameCount;
 };
 
 enum VideoState
@@ -45,6 +46,8 @@ class VideoStream
         vector<AVPacket> getPacketsSince(int64_t pts);
         inline VideoStreamQueue *getQueue() { return this->queue; }
         inline AVStream *getAVStream() { return this->vstrm; }
+        inline std::string getUrl() { return this->url; }
+        inline VideoState getState() { return this->threadState; }
 
     private:
         std::thread *thread;

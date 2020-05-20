@@ -172,6 +172,7 @@ void VideoStream::threadProcess(VideoStream *data)
                     item->packet = av_packet_clone(&packet);
                     item->mat = img.clone();
                     item->time_base = vstrm->time_base;
+                    item->frameCount = frames;
 
                     // if (!strncmp(data->url.c_str(), "rtsp://", 7))
                     // {
@@ -191,6 +192,7 @@ void VideoStream::threadProcess(VideoStream *data)
                 FrameQueueItem *item = new FrameQueueItem;
                 item->packet = av_packet_clone(&packet);
                 item->time_base = vstrm->time_base;
+                item->frameCount = frames;
 
                 if (!data->queue->try_push(item))
                 {
@@ -198,13 +200,14 @@ void VideoStream::threadProcess(VideoStream *data)
                     delete item;
                 }
             }
+
+            frames++;
         }
 
         av_packet_unref(&packet);
         av_init_packet(&packet);
 
         long long ellapsed = now - start;
-        frames++;
 
         if (ellapsed >= 1000 * 15)
         {

@@ -4,7 +4,7 @@
 #include <iostream>
 #include <opencv2/highgui.hpp>
 
-#define KEEP_PACKAGES_AFTER_KEYFRAME
+// #define KEEP_PACKAGES_AFTER_KEYFRAME
 // #define SHOW_MOVEMENT_DETECTION
 
 using namespace std;
@@ -47,9 +47,6 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
            break;
         }
 
-        // imshow("thread", item->mat);
-        // waitKey(25);
-
         DetectedMovements movements = item->mat.empty() ? DetectedMovements() : movementDetector.detectMovement(item->mat);
 
         if (item->packet->flags & AV_PKT_FLAG_KEY) // Keyframe
@@ -61,7 +58,7 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
             lastKeyFrame = item->packet->pts;
 
 #ifndef KEEP_PACKAGES_AFTER_KEYFRAME
-        packetsFromKeyFrame.push_back(av_packet_clone(item->packet));
+            packetsFromKeyFrame.push_back(av_packet_clone(item->packet));
 #endif
         }
 
@@ -160,7 +157,7 @@ Record::Record(AVStream *i_video_stream)
     string video = filename + ".mp4";
     string data = filename + ".movements";
 
-    this->data = fopen(data.c_str(), "w");
+    this->data.open(data);
 
     avformat_alloc_output_context2(&this->o_fmt_ctx, NULL, NULL, video.c_str());
 
@@ -185,7 +182,7 @@ Record::Record(AVStream *i_video_stream)
 
 Record::~Record()
 {
-    fclose(this->data);
+    this->data.close();
 
     av_write_trailer(o_fmt_ctx);
     avcodec_close(o_fmt_ctx->streams[0]->codec);
@@ -202,11 +199,19 @@ std::string Record::getFileName()
 
 void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
 {
-    if (this->frames++ <= 1) // Keyframe and second frame should be considered at time 0.
+#ifdef KEEP_PACKAGES_AFTER_KEYFRAME
+    if (this->frames++ == 0)  // Keyframe
     {
         this->first_pts = packet->pts;
         this->first_dts = packet->dts;
     }
+#else
+    if (this->frames++ <= 1)
+    {
+        this->first_pts = packet->pts + this->frames;
+        this->first_dts = packet->dts + this->frames;
+    }
+#endif
 
     AVPacket *outPacket = av_packet_clone(packet);
     outPacket->pts = av_rescale_q_rnd(outPacket->pts - first_pts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
@@ -219,16 +224,21 @@ void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
     this->duration = av_rescale_q(outPacket->pts, this->o_video_stream->time_base, {1, 1000}) / 1000.;
 
     unsigned long nMovements = movements ? movements->size() : 0;
-    fwrite(&nMovements, sizeof(unsigned long), 1, this->data);
+    this->data << nMovements << endl;
 
     for (int i = 0; i < nMovements; i++)
     {
         unsigned long nPoints = (*movements)[i].contour.size();
 
-        fwrite(&nPoints, sizeof(unsigned long), 1, this->data);
+        this->data << nPoints;
 
         for (unsigned long j = 0; j < nPoints; j++)
-            fwrite(&((*movements)[i].contour[j]), sizeof(Point), 1, this->data);
+        {
+            Point p = (*movements)[i].contour[j];
+            this->data << " " << p.x << " " << p.y;
+        }
+
+        this->data << endl;
     }
 }
 
@@ -238,12 +248,12 @@ MotionRecordReader::MotionRecordReader(string filename) : queue(1)
     this->video.start(videoFilename, &this->queue);
 
     string movementsFilename = filename + ".movements";
-    this->fMovements = fopen(movementsFilename.c_str(), "r");
+    this->fMovements.open(movementsFilename);
 }
 
 MotionRecordReader::~MotionRecordReader()
 {
-    fclose(this->fMovements);
+    this->fMovements.close();
     this->queue.close();
 }
 
@@ -264,24 +274,35 @@ bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements *&mov
 
         if (!item->mat.empty())
         {
-            fread(&nMovements, sizeof(unsigned long), 1, this->fMovements);
-            movementsDst = new DetectedMovements(nMovements);
-
-            for (int i = 0; i < nMovements; i++)
+            try
             {
-                unsigned long nPoints;
-                fread(&nPoints, sizeof(unsigned long), 1, this->fMovements);
-                vector<Point> contour(nPoints);
+                this->fMovements >> nMovements;
 
-                for (unsigned long j = 0; j < nPoints; j++)
+                movementsDst = new DetectedMovements(nMovements);
+
+                for (int i = 0; i < nMovements; i++)
                 {
-                    Point point;
-                    fread(&point, sizeof(Point), 1, this->fMovements);
-                    contour[j] = point;
-                }
+                    unsigned long nPoints;
+                    this->fMovements >> nPoints;
 
-                (*movementsDst)[i] = DetectedMovement(contour);
-                //movementsDst->push_back(DetectedMovement(contour));
+                    vector<Point> contour(nPoints);
+
+                    for (unsigned long j = 0; j < nPoints; j++)
+                    {
+                        Point point;
+
+                        this->fMovements >> point.x >> point.y;
+
+                        contour[j] = point;
+                    }
+
+                    (*movementsDst)[i] = DetectedMovement(contour);
+                }
+            }
+            catch (std::exception &e)
+            {
+                std::cout << e.what() << std::endl;
+                return false;
             }
         }
 

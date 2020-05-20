@@ -45,6 +45,11 @@ inline void ObjectDetector::preprocess(const Mat &originalFrame, Net &net, Size 
     //blobFromImage(frame, blob, 1.0, inpSize, Scalar(), false, false);
     blobFromImage(frame, blob, 1.0 / 255.0, inpSize, Scalar(), false, false);
 
+#ifdef SHOW_OBJECT_DETECTION
+    imshow("net", frame);
+    waitKey(25);
+#endif
+
     // Run a model.
     this->net.setInput(blob);
     if (this->net.getLayer(0)->outputNameToIndex("im_info") != -1) // Faster-RCNN or R-FCN

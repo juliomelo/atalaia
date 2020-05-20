@@ -30,8 +30,11 @@ public:
     bool try_push(T const &value)
     {
         if (closed || terminating)
+        {
+            std::cout << "Queue is closed." << std::endl;
             return false;
-
+        }
+        else
         {
             std::unique_lock<std::mutex> lock(this->_mutex);
 
@@ -49,9 +52,9 @@ public:
     T pop()
     {
         std::unique_lock<std::mutex> lock(this->_mutex);
-        this->_condition.wait(lock, [=] { return closed || !this->_queue.empty(); });
+        this->_condition.wait(lock, [=] { return closed || !this->_queue.empty() || terminating; });
 
-        if (closed && this->_queue.empty() || terminating) {
+        if ((closed && this->_queue.empty()) || terminating) {
             return this->closedObject;
         }
 
@@ -84,6 +87,6 @@ public:
     void waitShutdown()
     {
         std::unique_lock<std::mutex> lock(this->_mutex);
-        this->_condition.wait(lock, [=] { return closed && this->_queue.empty() || terminating; });
+        this->_condition.wait(lock, [=] { return (closed && this->_queue.empty()) || terminating; });
     }
 };

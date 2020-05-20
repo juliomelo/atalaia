@@ -4,6 +4,8 @@
 #include <set>
 #include <stdio.h>
 
+#define SHOW_OBJECT_DETECTION
+
 using namespace cv;
 
 #define matchAreaMatrix(a, b, c) matchArea[a * nTracked * 2 + b * 2 + c]
@@ -71,7 +73,12 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
                 matchesTracked[iObj] = true;
                 lastObjects[iObj].missCount = 0;
                 nMatches++;
-                lastObjects[iObj].box = newObjects[best].box;
+
+                int previousArea = lastObjects[iObj].box.area();
+                int newArea = newObjects[best].box.area();
+
+                if (std::min(newArea, previousArea) / (float) std::max(newArea, previousArea) < .7)
+                    lastObjects[iObj].box = newObjects[best].box;
 
                 if (lastObjects[iObj].confidence < newObjects[best].confidence)
                     lastObjects[iObj].confidence = newObjects[best].confidence;
@@ -122,7 +129,7 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
                 }
             }
 
-            if (!matchesNew[i] && newObjects[i].confidence >= .6)
+            if (!matchesNew[i] /* && newObjects[i].confidence >= .6 */)
             {
                 lastObjects.push_back(newObjects[i]);
                 tracker->add(TrackerKCF::create(), mat, newObjects[i].box);
@@ -161,6 +168,7 @@ void ObjectRecorder::process(string file)
 
     {
         MotionRecordReader reader(file);
+        ObjectRecordWriter writer(file);
         FrameQueueItem *frame = NULL;
         DetectedMovements *movements;
         MultiTracker *multiTracker = NULL;
@@ -196,6 +204,7 @@ void ObjectRecorder::process(string file)
                     if (obj->id == 0)
                         obj->id = ++objectCount;
 
+#ifdef SHOW_OBJECT_DETECTION
                     rectangle(frame->mat, obj->box, obj->missCount > 0 ? Scalar(0, 0, 255) : Scalar(0, 255, 0));
 
                     std::string label = format("Obj %d: %s (c: %f; m: %d)", obj->id, obj->type.c_str(), obj->confidence, obj->missCount);
@@ -208,6 +217,7 @@ void ObjectRecorder::process(string file)
                     rectangle(frame->mat, Point(obj->box.x, top),
                                 Point(obj->box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
                     putText(frame->mat, label, Point(obj->box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
+#endif
 
                     if (objectTypes.count(obj->type) == 0)
                     {
@@ -218,15 +228,22 @@ void ObjectRecorder::process(string file)
                     }
                 }
 
+#ifdef SHOW_OBJECT_DETECTION
                 if (knownObjects.size() > 0) {
-                    cout << "---" << "\n";
+                    cout << "---[ Frame " << frame->frameCount << " ]---" << endl;
+
+                    for (int i = 0; i < movements->size(); i++)
+                        polylines(frame->mat, (*movements)[i].contour, true, Scalar(0, 0, 255));
+
                     Mat show;
                     resize(frame->mat, show, Size(640, 480));
                     imshow("objects", show);
-                    // imshow("objects", frame->mat);
                     waitKey(25);
                 }
+#endif
             }
+
+            writer.write(frame->frameCount, knownObjects);
 
             delete frame;
             delete movements;
@@ -235,12 +252,40 @@ void ObjectRecorder::process(string file)
 
     if (objectTypes.size() == 0)
     {
-        string mp4 = file + ".mp4";
-        string movements = file + ".movements";
+        const char *extensions[] = { ".mp4", ".movements", ".objects", NULL };
 
-        remove(mp4.c_str());
-        remove(movements.c_str());
+        for (const char **extension = extensions; extension; extension++)
+        {
+            string toRemove = file + *extension;
+            remove(toRemove.c_str());
+        }
     }
 
     cout << "Processed " << file << "\n";
+}
+
+ObjectRecordWriter::ObjectRecordWriter(string file)
+{
+    this->fObjects.open(file + ".objects");
+}
+
+ObjectRecordWriter::~ObjectRecordWriter()
+{
+    this->fObjects.close();
+}
+
+void ObjectRecordWriter::write(unsigned int frame, DetectedObjects objects)
+{
+    if (!objects.empty())
+    {
+        this->fObjects << frame << " " << objects.size() << endl;
+
+        for (DetectedObjects::iterator it = objects.begin(); it != objects.end(); it++)
+        {
+            DetectedObject obj = *it;
+
+            this->fObjects << obj.id << " " << obj.type << " " << obj.confidence << " " << obj.missCount << " "
+                << obj.box.x << " " << obj.box.y << " " << obj.box.width << " " << obj.box.height << endl;
+        }
+    }
 }

@@ -5,6 +5,7 @@
 #include <list>
 #include "MovementDetector.hpp"
 #include "../notify/Notify.hpp"
+#include <fstream>
 
 using namespace std;
 
@@ -40,7 +41,7 @@ class Record
         AVFormatContext *o_fmt_ctx;
         AVStream *i_video_stream;
         AVStream *o_video_stream;
-        FILE *data;
+        std::ofstream data;
         std::string filename;
         int64_t frames;
         int64_t first_pts;
@@ -58,5 +59,5 @@ class MotionRecordReader
     private:
         VideoStream video;
         VideoStreamQueue queue;
-        FILE *fMovements;
+        std::ifstream fMovements;
 };

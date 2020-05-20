@@ -3,6 +3,7 @@
 #include "MotionRecorder.hpp"
 #include "../notify/Listener.hpp"
 #include "ObjectDetector.hpp"
+#include <fstream>
 
 class ObjectRecorder : public Listener
 {
@@ -15,7 +16,14 @@ class ObjectRecorder : public Listener
         Notifier *notifier;
 };
 
-class FollowedObject : public DetectedObject
+class ObjectRecordWriter
 {
-    
+    public:
+        ObjectRecordWriter(string file);
+        virtual ~ObjectRecordWriter();
+
+        void write(unsigned int frame, DetectedObjects detectedObjects);
+
+    private:
+        ofstream fObjects;
 };

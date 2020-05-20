@@ -70,6 +70,16 @@ int monitorMovements(int argc, char **argv)
 	{
 		notifier.getConnection()->heartbeat();
 		notifier.getHandler()->read();
+
+		for (list<VideoStream *>::iterator it = streams.begin(); it != streams.end(); it++)
+			switch ((*it)->getState())
+			{
+				case VideoState::SHUTDOWN:
+				case VideoState::FAILURE:
+					cout << "VideoState is " << (*it)->getState() << endl;
+					terminating = true;
+					break;
+			}
 	}
 
 	for (list<VideoStream *>::iterator it = streams.begin(); it != streams.end(); ++it)
@@ -193,7 +203,7 @@ int main(int argc, char **argv)
 	for (int i = 0; i < argc - 1; i++)
 		queue[i]->waitShutdown();
 
-	cout << "Deleting..." << endl;
+	cout << "Finishing..." << endl;
 	
 	for (int i = 0; i < argc - 1; i++)
 	{
