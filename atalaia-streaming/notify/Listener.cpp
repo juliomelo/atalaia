@@ -20,6 +20,7 @@ void Listener::waitShutdown(bool close)
         this->queue.close();
 
     this->queue.waitShutdown();
+    this->thread->join();
 }
 
 void Listener::threadProcess(Listener *listener)

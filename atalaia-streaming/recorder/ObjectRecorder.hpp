@@ -1,11 +1,11 @@
 #pragma once
 
 #include "MotionRecorder.hpp"
-#include "../notify/Listener.hpp"
 #include "ObjectDetector.hpp"
 #include <fstream>
+#include "../notify/Notify.hpp"
 
-class ObjectRecorder : public Listener
+class ObjectRecorder
 {
     public:
         ObjectRecorder(Notifier *notifier) : notifier(notifier) {}

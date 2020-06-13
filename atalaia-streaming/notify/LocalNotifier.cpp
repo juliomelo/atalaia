@@ -1,18 +1,18 @@
-#include "Notify.hpp"
+#include "LocalNotifier.hpp"
 
 using namespace std;
-
-LocalNotifier::LocalNotifier(Listener *movements)
-{
-    this->movements = movements;
-}
 
 void LocalNotifier::notify(string filename, NotifyEvent event, string arg)
 {
     switch (event)
     {
         case NotifyEvent::MOVEMENT:
-            this->movements->enqueue(filename);
+            this->movementListener.enqueue(filename);
             break;
     }
+}
+
+void LocalNotifier::waitShutdown()
+{
+    this->movementListener.waitShutdown(true);
 }
