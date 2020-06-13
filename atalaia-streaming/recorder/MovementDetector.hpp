@@ -9,7 +9,6 @@
 
 using namespace std;
 using namespace cv;
-// using namespace cv::bgsegm;
 
 class DetectedMovement
 {
@@ -38,7 +37,7 @@ class MovementDetector
         DetectedMovements detectMovement(const Mat& frame);
 
     private:
-        Ptr<BackgroundSubtractor> bgsubtractor;
+        Ptr<BackgroundSubtractorMOG2> bgsubtractor;
         Mat bgmask;
         bool update_bg_model;
 

@@ -4,7 +4,9 @@
 // Based on https://docs.opencv.org/3.2.0/dd/d9d/segment_objects_8cpp-example.html
 MovementDetector::MovementDetector()
 {
-    this->bgsubtractor = createBackgroundSubtractorMOG2();
+    this->bgsubtractor = createBackgroundSubtractorMOG2(500, 16 /*48*/, false);
+    this->bgsubtractor->setShadowValue(0);
+    // this->bgsubtractor = cv::bgsegm::createBackgroundSubtractorCNT();
     // this->bgsubtractor = cv::bgsegm::createBackgroundSubtractorGSOC();
     this->update_bg_model = true;
 }
@@ -27,7 +29,7 @@ DetectedMovements MovementDetector::refineSegments(const Mat &img, Mat &mask, /*
     // draw each connected component with its own random color
     int idx = 0, largestComp = 0;
     double maxArea = 0;
-    double areaThreshold = 26 * 26;
+    double areaThreshold = 54 * 54;
 
     DetectedMovements result;
 
@@ -36,7 +38,7 @@ DetectedMovements MovementDetector::refineSegments(const Mat &img, Mat &mask, /*
         const vector<Point>& c = contours[idx];
         double area = fabs(contourArea(Mat(c)));
 
-        if (area >= areaThreshold)
+        if (area * scale >= areaThreshold)
         {
             vector<Point> scaledContour;
 

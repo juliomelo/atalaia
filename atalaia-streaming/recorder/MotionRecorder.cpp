@@ -3,9 +3,7 @@
 #include <list>
 #include <iostream>
 #include <opencv2/highgui.hpp>
-
-// #define KEEP_PACKAGES_AFTER_KEYFRAME
-// #define SHOW_MOVEMENT_DETECTION
+#include "../main.hpp"
 
 using namespace std;
 
@@ -62,21 +60,21 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 #endif
         }
 
-        if (!movements.empty())
-        {
 #ifdef SHOW_MOVEMENT_DETECTION
-            for (int i = 0; i < movements.size(); i++)
-            {
-                 polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
-                 rectangle(item->mat, movements[i], Scalar(255, 0, 0));
-            }
+        for (int i = 0; i < movements.size(); i++)
+        {
+                polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
+                rectangle(item->mat, movements[i], Scalar(255, 0, 0));
+        }
 
-            Mat show;
-            resize(item->mat, show, Size(480, 320));
-            imshow("movement", show);
-            waitKey(25);
+        Mat show;
+        resize(item->mat, show, Size(480, 320));
+        imshow("movement", show);
+        waitKey(25);
 #endif
 
+        if (!movements.empty())
+        {
             dontStopUntil = item->packet->pts + 3.0 / (item->time_base.num / (float)item->time_base.den);
 
             if (!record)
@@ -122,8 +120,10 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
                 string mp4 = filename + ".mp4";
                 string movementsFilename = filename + ".movements";
 
+#ifdef REMOVE_FILES
                 remove(mp4.c_str());
                 remove(movementsFilename.c_str());
+#endif
             }
         }
         else if (record && movements.empty())
