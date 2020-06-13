@@ -10,3 +10,5 @@ CMakeCache.txt
 CMakeFiles
 docker-compose.yml
 Dockerfile
+*.mp4
+*.movements

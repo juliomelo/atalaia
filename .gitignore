@@ -346,3 +346,6 @@ healthchecksdb
 atalaia-streaming/.vscode/settings.json
 CMakeFiles
 CMakeCache.txt
+*.mp4
+*.movements
+
