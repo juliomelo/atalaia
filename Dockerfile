@@ -14,10 +14,13 @@ RUN apt update && apt install -y \
 FROM debian:buster as ia    
 
 # Install Yolo v3
+# https://pjreddie.com/darknet/yolo/
 RUN apt update && apt install -y wget && \
     mkdir -p /data/yolo && wget -O /data/yolo/yolov3-tiny.weights https://pjreddie.com/media/files/yolov3-tiny.weights && \
     wget -O /data/yolo/yolov3-tiny.cfg https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg && \
     wget -O /data/yolo/coco.names https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
+RUN wget -O /data/yolo/yolov3.cfg https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg && \
+    wget -O /data/yolo/yolov3.weigts https://pjreddie.com/media/files/yolov3.weights
 
 ###
 # Common lib for build
