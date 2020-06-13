@@ -3,8 +3,7 @@
 #include <opencv2/highgui.hpp>
 #include <set>
 #include <stdio.h>
-
-#define SHOW_OBJECT_DETECTION
+#include "../main.hpp"
 
 using namespace cv;
 
@@ -174,6 +173,9 @@ void ObjectRecorder::process(string file)
         MultiTracker *multiTracker = NULL;
         DetectedObjects knownObjects;
         unsigned int objectCount = 0;
+#ifdef SHOW_OBJECT_DETECTION
+        bool createdWindow = false;
+#endif
 
         while (reader.readNext(frame, movements))
         {
@@ -208,7 +210,7 @@ void ObjectRecorder::process(string file)
                     rectangle(frame->mat, obj->box, obj->missCount > 0 ? Scalar(0, 0, 255) : Scalar(0, 255, 0));
 
                     std::string label = format("Obj %d: %s (c: %f; m: %d)", obj->id, obj->type.c_str(), obj->confidence, obj->missCount);
-                    cout << label << " Rect: [" << obj->box.x << ", " << obj->box.y << "; " << obj->box.x + obj->box.width << ", " << obj->box.y + obj->box.height << "]\n";
+                    // cout << label << " Rect: [" << obj->box.x << ", " << obj->box.y << "; " << obj->box.x + obj->box.width << ", " << obj->box.y + obj->box.height << "]\n";
 
                     int baseLine;
                     Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
@@ -227,29 +229,34 @@ void ObjectRecorder::process(string file)
                             this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
                     }
                 }
+            }
 
 #ifdef SHOW_OBJECT_DETECTION
-                if (knownObjects.size() > 0) {
-                    cout << "---[ Frame " << frame->frameCount << " ]---" << endl;
+            // cout << "---[ Frame " << frame->frameCount << " ]---" << endl;
 
-                    for (int i = 0; i < movements->size(); i++)
-                        polylines(frame->mat, (*movements)[i].contour, true, Scalar(0, 0, 255));
+            for (int i = 0; i < movements->size(); i++)
+                polylines(frame->mat, (*movements)[i].contour, true, Scalar(0, 0, 255));
 
-                    Mat show;
-                    resize(frame->mat, show, Size(640, 480));
-                    imshow("objects", show);
-                    waitKey(25);
-                }
+            Mat show;
+            resize(frame->mat, show, Size(640, 480));
+            imshow("objects", show);
+            waitKey(25);
+            createdWindow = true;
 #endif
-            }
 
             writer.write(frame->frameCount, knownObjects);
 
             delete frame;
             delete movements;
         }
+
+#ifdef SHOW_OBJECT_DETECTION
+        if (createdWindow)
+            destroyWindow("objects");
+#endif
     }
 
+#ifdef REMOVE_FILES
     if (objectTypes.size() == 0)
     {
         const char *extensions[] = { ".mp4", ".movements", ".objects", NULL };
@@ -260,6 +267,7 @@ void ObjectRecorder::process(string file)
             remove(toRemove.c_str());
         }
     }
+#endif
 
     cout << "Processed " << file << "\n";
 }
