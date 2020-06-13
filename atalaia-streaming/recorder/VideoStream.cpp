@@ -187,19 +187,19 @@ void VideoStream::threadProcess(VideoStream *data)
                     }
                 }
             }
-            else
-            {
-                FrameQueueItem *item = new FrameQueueItem;
-                item->packet = av_packet_clone(&packet);
-                item->time_base = vstrm->time_base;
-                item->frameCount = frames;
+            // else
+            // {
+            //     FrameQueueItem *item = new FrameQueueItem;
+            //     item->packet = av_packet_clone(&packet);
+            //     item->time_base = vstrm->time_base;
+            //     item->frameCount = frames;
 
-                if (!data->queue->try_push(item))
-                {
-                    cout << "Can't push item to queue!\n";
-                    delete item;
-                }
-            }
+            //     if (!data->queue->try_push(item))
+            //     {
+            //         cout << "Can't push item to queue!\n";
+            //         delete item;
+            //     }
+            // }
 
             frames++;
         }
