@@ -1,20 +1,16 @@
 ﻿#include "main.hpp"
-#include <iostream>
-#include "util/BlockingQueue.hpp"
-#include "recorder/VideoStream.hpp"
+#include "notify/amqp/AMQPNotifier.hpp"
+#include "notify/LocalNotifier.hpp"
 #include "recorder/MotionRecorder.hpp"
 #include "recorder/ObjectRecorder.hpp"
-#include <thread>
-#include "notify/amqp/AMQPNotifier.hpp"
-
-extern "C"
-{
-#include <libavformat/avio.h>
-}
-
-#include <fstream>
+#include "recorder/VideoStream.hpp"
+#include "util/BlockingQueue.hpp"
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <libavformat/avio.h>
 #include <signal.h>
+#include <thread>
 
 using namespace cv;
 using namespace std;
@@ -134,7 +130,7 @@ int monitorObjects(int argc, char **argv)
 	else
 	{
 		cout << "Processing " << argv[0] << endl;
-		LocalNotifier notifier(NULL);
+		LocalNotifier notifier;
 		ObjectRecorder recorder(&notifier);
 		recorder.process(argv[0]);
 	}
@@ -184,11 +180,10 @@ int main(int argc, char **argv)
 
 	cout << "Local processing: " << argv[1] << endl;
 
-	ObjectRecorder objRecorder(NULL);
 	VideoStreamQueue *queue[argc - 1];
 	VideoStream *stream[argc - 1];
 	MotionRecorder *recorder[argc - 1];
-	LocalNotifier notifier(&objRecorder);
+	LocalNotifier notifier;
 	
 	for (int i = 0; i < argc - 1; i++)
 	{
@@ -214,7 +209,7 @@ int main(int argc, char **argv)
 
 	cout << "Wainting " << argc  << " object recorder to finish.\n";
 
-	objRecorder.waitShutdown(true);
+	notifier.waitShutdown();
 
 	cout << "Done.\n";
 

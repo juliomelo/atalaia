@@ -21,7 +21,7 @@ add_executable(atalaia-streaming
     recorder/ObjectDetector.cpp recorder/ObjectDetector.hpp
     recorder/ObjectRecorder.cpp recorder/ObjectRecorder.hpp
     notify/Listener.hpp notify/Listener.cpp
-    notify/Notify.hpp notify/LocalNotifier.cpp
+    notify/Notify.hpp notify/LocalNotifier.hpp notify/LocalNotifier.cpp
     notify/amqp/AtalaiaTcpHandler.hpp notify/amqp/AtalaiaTcpHandler.cpp
     notify/amqp/AMQPNotifier.hpp notify/amqp/AMQPNotifier.cpp
 )
