@@ -12,6 +12,8 @@
 using namespace cv;
 using namespace dnn;
 
+#define SHOW_OBJECT_DETECTION
+
 ObjectDetector::ObjectDetector(string modelPath, string configPath, string classesPath, double confThreshold, double nmsThreshold)
 {
     ifstream ifs(classesPath.c_str());
@@ -43,7 +45,7 @@ inline void ObjectDetector::preprocess(const Mat &originalFrame, Net &net, Size 
     Mat frame;
     resize(originalFrame, frame, inpSize);
     //blobFromImage(frame, blob, 1.0, inpSize, Scalar(), false, false);
-    blobFromImage(frame, blob, 1.0 / 255.0, inpSize, Scalar(), false, false);
+    blobFromImage(frame, blob, 1.0 / 255.0, inpSize, Scalar(), true, false);
 
 #ifdef SHOW_OBJECT_DETECTION
     imshow("net", frame);
@@ -188,6 +190,8 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
     {
         DetectedObjects result;
         float factor = 1 / (float) CLASSIFY_FACTOR / (this->size.width / (float) mat.cols);
+
+#ifdef ALLOW_FULLSCREEN
         Size fullscreenThreshold = Size((int)(this->size.width * factor), (int)(this->size.height * factor));
         bool classifyFullscreen = false;
 
@@ -208,6 +212,11 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
             DetectedObjects d = this->classify(mat, false);
             result.insert(result.end(), d.begin(), d.end());
         }
+#endif
+
+        float ratio = this->size.width / (float) this->size.height;
+        float invertedRatio = this->size.height / (float) this->size.width;
+        uint maxSize = std::min(this->size.width, this->size.height);
 
         // Classify smaller rectangles
         while (!rects.empty())
@@ -222,8 +231,8 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
                 y1 = y1 < r.y ? y1 : r.y;
             }
 
-            uint minX2 = x1 + this->size.width, minY2 = y1 + this->size.height;
-            uint maxX2 = x1 + this->size.width * CLASSIFY_FACTOR, maxY2 = y1 + this->size.height * CLASSIFY_FACTOR; // a ideia eh pegar o maximo de objetos em que o menor seja 1/8;
+            uint maxX2 = x1 + maxSize;
+            uint maxY2 = y1 + maxSize;
             uint x2 = 0, y2 = 0;
 
             // Let's classify every object in the viewport.
@@ -233,18 +242,30 @@ DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects
 
                 if (r.x >= x1 && r.x + r.width <= maxX2 && r.y >= y1 && r.y + r.height <= maxY2)
                 {
-                    x2 = x2 > r.x + r.width ? x2 : r.x + r.width;
-                    y2 = y2 > r.y + r.height ? y2 : r.y + r.height;
-                    minX2 = std::max(minX2, (uint) r.x + r.width);
-                    minY2 = std::max(minY2, (uint) r.y + r.height);
+                    x2 = std::max(x2, (uint) r.x + r.width);
+                    y2 = std::max(y2, (uint) r.y + r.height);
                     it = rects.erase(it);
                 } else {
                     ++it;
                 }
             }
 
+            if (x2 == 0)
+            {
+                DetectedObjects d = this->classify(mat, false);
+                result.insert(result.end(), d.begin(), d.end());
+                break;
+            }
+
             // Let's center the image
-            Rect r(x1 - (minX2 - x2) / 2, y1 - (minY2 - y2) / 2, this->size.width, this->size.height);
+            float newRatio = (x2 - x1) / (float) (y2 - y1);
+            bool invert = ratio >= 1 && newRatio < 1 || ratio < 1 && newRatio >= 1;
+            uint width = std::max((uint) this->size.width, invert ? (uint) (ratio * (y2 - y1)) : x2 - x1);
+            uint height = std::max((uint) this->size.height, invert ? y2 - y1 : (uint) (invertedRatio * width));
+
+            Rect r(x1 - std::max((uint) 0, (uint) width - (x2 - x1) /* mudar aqui pelo tamanho desejado */) / 2,
+                   y1 - std::max((uint) 0, (uint) height - (y2 - y1) /* mudar aqui pela altura desejada */) / 2,
+                   width, height);
 
             if (r.x < 0)
                 r.x = 0;
