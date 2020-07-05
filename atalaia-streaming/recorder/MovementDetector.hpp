@@ -1,13 +1,13 @@
 #pragma once
 
 #include "opencv2/imgproc.hpp"
-#include "opencv2/video/background_segm.hpp"
-// #include "opencv2/bgsegm.hpp"
+#include "opencv2/bgsegm.hpp"
 #include <stdio.h>
 #include <string>
 
 using namespace std;
 using namespace cv;
+using namespace cv::bgsegm;
 
 class DetectedMovement
 {
@@ -33,10 +33,11 @@ class MovementDetector
 {
     public:
         MovementDetector();
+        virtual ~MovementDetector();
         DetectedMovements detectMovement(const Mat& frame);
 
     private:
-        Ptr<BackgroundSubtractorMOG2> bgsubtractor;
+        Ptr<BackgroundSubtractor> bgsubtractor;
         Mat bgmask;
         bool update_bg_model;
 

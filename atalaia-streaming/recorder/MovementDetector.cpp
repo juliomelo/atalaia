@@ -1,14 +1,19 @@
 #include "MovementDetector.hpp"
 #include "opencv2/highgui.hpp"
+#include "opencv2/video/background_segm.hpp"
 
 // Based on https://docs.opencv.org/3.2.0/dd/d9d/segment_objects_8cpp-example.html
 MovementDetector::MovementDetector()
 {
     this->bgsubtractor = createBackgroundSubtractorMOG2(500, 16 /*48*/, false);
-    this->bgsubtractor->setShadowValue(0);
+    // ((BackgroundSubtractorMOG2 *) (this->bgsubtractor))->setShadowValue(0);
     // this->bgsubtractor = cv::bgsegm::createBackgroundSubtractorCNT();
     // this->bgsubtractor = cv::bgsegm::createBackgroundSubtractorGSOC();
     this->update_bg_model = true;
+}
+
+MovementDetector::~MovementDetector() {
+    delete this->bgsubtractor;
 }
 
 DetectedMovements MovementDetector::refineSegments(const Mat &img, Mat &mask, /*Mat &dst,*/ double scale)

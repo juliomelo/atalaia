@@ -95,8 +95,6 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
                     record->writePacket(*it);
                     av_packet_unref(*it);
                 }
-
-                waitingMovement.clear();
             }
 
             record->writePacket(item->packet, &movements);
@@ -117,8 +115,6 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
             for (list<AVPacket *>::iterator it = waitingMovement.begin(); it != waitingMovement.end(); it = waitingMovement.erase(it))
                 av_packet_unref(*it);
-
-            waitingMovement.clear();
 
             if (recorder->notifier && keep)
                 recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
@@ -198,7 +194,8 @@ Record::~Record()
     av_freep(&o_fmt_ctx->streams[0]->codec);
     av_freep(&o_fmt_ctx->streams[0]);
     avio_close(o_fmt_ctx->pb);
-    av_free(o_fmt_ctx);
+    avformat_free_context(this->o_fmt_ctx);
+//    av_free(o_fmt_ctx);
 }
 
 std::string Record::getFileName()
@@ -249,6 +246,8 @@ void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
 
         this->data << endl;
     }
+
+    av_packet_unref(outPacket);
 }
 
 MotionRecordReader::MotionRecordReader(string filename) : queue(1)
