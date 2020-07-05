@@ -12,8 +12,6 @@
 using namespace cv;
 using namespace dnn;
 
-#define SHOW_OBJECT_DETECTION
-
 ObjectDetector::ObjectDetector(string modelPath, string configPath, string classesPath, double confThreshold, double nmsThreshold)
 {
     ifstream ifs(classesPath.c_str());

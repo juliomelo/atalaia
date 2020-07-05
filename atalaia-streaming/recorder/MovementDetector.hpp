@@ -1,5 +1,4 @@
-#ifndef MOVEMENT_DETECTOR_H
-#define MOVEMENT_DETECTOR_H
+#pragma once
 
 #include "opencv2/imgproc.hpp"
 #include "opencv2/video/background_segm.hpp"
@@ -43,5 +42,3 @@ class MovementDetector
 
         DetectedMovements refineSegments(const Mat &img, Mat &mask, /*Mat &dst,*/ double scale = 1);
 };
-
-#endif
