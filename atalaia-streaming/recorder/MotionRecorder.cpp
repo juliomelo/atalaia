@@ -28,7 +28,9 @@ MotionRecorder::~MotionRecorder()
 void MotionRecorder::threadProcess(MotionRecorder *recorder)
 {
     MovementDetector movementDetector;
+#ifdef KEEP_PACKAGES_AFTER_KEYFRAME
     std::list<AVPacket *> packetsFromKeyFrame;
+#endif
     Record *record = NULL;
     int64_t dontStopUntil = 0;
     int64_t videoTimeThreshold = 0;
@@ -49,15 +51,14 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
         if (item->packet->flags & AV_PKT_FLAG_KEY) // Keyframe
         {
+#ifdef KEEP_PACKAGES_AFTER_KEYFRAME
             for (list<AVPacket *>::iterator it = packetsFromKeyFrame.begin(); it != packetsFromKeyFrame.end(); ++it)
                 av_packet_unref(*it);
 
             packetsFromKeyFrame.clear();
-            lastKeyFrame = item->packet->pts;
-
-#ifndef KEEP_PACKAGES_AFTER_KEYFRAME
-            packetsFromKeyFrame.push_back(av_packet_clone(item->packet));
 #endif
+
+            lastKeyFrame = item->packet->pts;
         }
 
 #ifdef SHOW_MOVEMENT_DETECTION
@@ -82,8 +83,10 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
                 videoTimeThreshold = item->packet->pts + recorder->maxSeconds / (item->time_base.num / (float)item->time_base.den);
                 record = new Record(recorder->stream->getAVStream());
 
+#ifdef KEEP_PACKAGES_AFTER_KEYFRAME
                 for (list<AVPacket *>::iterator it = packetsFromKeyFrame.begin(); it != packetsFromKeyFrame.end(); ++it)
                     record->writePacket(*it);
+#endif
             }
             else
             {
@@ -92,6 +95,8 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
                     record->writePacket(*it);
                     av_packet_unref(*it);
                 }
+
+                waitingMovement.clear();
             }
 
             record->writePacket(item->packet, &movements);
@@ -109,6 +114,10 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
             delete record;
             record = NULL;
+
+            for (list<AVPacket *>::iterator it = waitingMovement.begin(); it != waitingMovement.end(); it = waitingMovement.erase(it))
+                av_packet_unref(*it);
+
             waitingMovement.clear();
 
             if (recorder->notifier && keep)
