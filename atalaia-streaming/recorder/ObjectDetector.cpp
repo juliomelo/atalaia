@@ -12,7 +12,10 @@
 using namespace cv;
 using namespace dnn;
 
-ObjectDetector::ObjectDetector(string modelPath, string configPath, string classesPath, double confThreshold, double nmsThreshold)
+#define CLASSIFY_FACTOR 8
+
+ObjectDetector::ObjectDetector(string modelPath, string configPath, string classesPath, Size size, float classifyFactor, double confThreshold, double nmsThreshold)
+: ClassifierFromMovement(size, classifyFactor, true, confThreshold, nmsThreshold)
 {
     ifstream ifs(classesPath.c_str());
     string line;
@@ -60,16 +63,7 @@ inline void ObjectDetector::preprocess(const Mat &originalFrame, Net &net, Size 
     }
 }
 
-void translate(DetectedObjects &d, int dx, int dy)
-{
-    for (int i = 0; i < d.size(); i++)
-    {
-        d[i].box.x += dx;
-        d[i].box.y += dy;
-    }
-}
-
-DetectedObjects ObjectDetector::postprocess(Mat &frame, const std::vector<Mat> &outs, Net &net, bool runNMS)
+std::vector<DetectedObject> ObjectDetector::postprocess(Mat &frame, const std::vector<Mat> &outs, Net &net)
 {
     DetectedObjects results;
     std::vector<int> classIds;
@@ -145,170 +139,26 @@ DetectedObjects ObjectDetector::postprocess(Mat &frame, const std::vector<Mat> &
     else
         CV_Error(Error::StsNotImplemented, "Unknown output layer type: " + outLayerType);
 
-    DetectedObjects objects;
+    vector<DetectedObject> objects(boxes.size());
 
-    if (runNMS)
-    {
-        std::vector<int> indices;
-        NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);
-
-        for (size_t i = 0; i < indices.size(); ++i)
-        {
-            int idx = indices[i];
-            objects.push_back(DetectedObject(this->classes[classIds[idx]], confidences[idx], boxes[idx]));
-        }
-    }
-    else
-        for (size_t i = 0; i < boxes.size(); ++i)
-            objects.push_back(DetectedObject(this->classes[classIds[i]], confidences[i], boxes[i]));
+    for (size_t i = 0; i < boxes.size(); ++i)
+        objects.push_back(DetectedObject(this->classes[classIds[i]], confidences[i], boxes[i]));
 
     return objects;
 }
 
-DetectedObjects ObjectDetector::classify(Mat &mat, bool runNMS)
+vector<DetectedObject> ObjectDetector::classify(Mat &mat)
 {
     preprocess(mat, net, this->size);
 
     std::vector<Mat> outs;
     net.forward(outs, outNames);
 
-    return postprocess(mat, outs, net, runNMS);
+    return postprocess(mat, outs, net);
 }
 
-YoloV3ObjectDetector::YoloV3ObjectDetector(string modelPath, string configPath, string classesPath, int width, int height) : ObjectDetector(modelPath, configPath, classesPath)
+YoloV3ObjectDetector::YoloV3ObjectDetector(string modelPath, string configPath, string classesPath, int width, int height) : ObjectDetector(modelPath, configPath, classesPath, Size(width, height), CLASSIFY_FACTOR)
 {
-    this->size = Size(width, height);
-}
-
-#define CLASSIFY_FACTOR 8
-
-DetectedObjects ObjectDetector::classifyFromMovements(Mat &mat, list<Rect> rects)
-{
-    if (!rects.empty() && (mat.cols > this->size.width || mat.rows > this->size.height))
-    {
-        DetectedObjects result;
-        float factor = 1 / (float) CLASSIFY_FACTOR / (this->size.width / (float) mat.cols);
-
-#ifdef ALLOW_FULLSCREEN
-        Size fullscreenThreshold = Size((int)(this->size.width * factor), (int)(this->size.height * factor));
-        bool classifyFullscreen = false;
-
-        for (list<Rect>::iterator it = rects.begin(); it != rects.end();)
-        {
-            Rect r = *it;
-
-            if (r.width >= fullscreenThreshold.width || r.height >= fullscreenThreshold.height)
-            {
-                it = rects.erase(it);
-                classifyFullscreen = true;
-            } else
-                ++it;
-        }
-
-        if (classifyFullscreen)
-        {
-            DetectedObjects d = this->classify(mat, false);
-            result.insert(result.end(), d.begin(), d.end());
-        }
-#endif
-
-        float ratio = this->size.width / (float) this->size.height;
-        float invertedRatio = this->size.height / (float) this->size.width;
-        uint maxSize = std::min(this->size.width, this->size.height);
-
-        // Classify smaller rectangles
-        while (!rects.empty())
-        {
-            uint x1 = ~0, y1 = ~0;
-
-            for (list<Rect>::iterator it = rects.begin(); it != rects.end(); ++it)
-            {
-                Rect r = *it;
-
-                x1 = x1 < r.x ? x1 : r.x;
-                y1 = y1 < r.y ? y1 : r.y;
-            }
-
-            uint maxX2 = x1 + maxSize;
-            uint maxY2 = y1 + maxSize;
-            uint x2 = 0, y2 = 0;
-
-            // Let's classify every object in the viewport.
-            for (list<Rect>::iterator it = rects.begin(); it != rects.end();)
-            {
-                Rect r = *it;
-
-                if (r.x >= x1 && r.x + r.width <= maxX2 && r.y >= y1 && r.y + r.height <= maxY2)
-                {
-                    x2 = std::max(x2, (uint) r.x + r.width);
-                    y2 = std::max(y2, (uint) r.y + r.height);
-                    it = rects.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-
-            if (x2 == 0)
-            {
-                DetectedObjects d = this->classify(mat, false);
-                result.insert(result.end(), d.begin(), d.end());
-                break;
-            }
-
-            // Let's center the image
-            float newRatio = (x2 - x1) / (float) (y2 - y1);
-            bool invert = ratio >= 1 && newRatio < 1 || ratio < 1 && newRatio >= 1;
-            uint width = std::max((uint) this->size.width, invert ? (uint) (ratio * (y2 - y1)) : x2 - x1);
-            uint height = std::max((uint) this->size.height, invert ? y2 - y1 : (uint) (invertedRatio * width));
-
-            Rect r(x1 - std::max((uint) 0, (uint) width - (x2 - x1) /* mudar aqui pelo tamanho desejado */) / 2,
-                   y1 - std::max((uint) 0, (uint) height - (y2 - y1) /* mudar aqui pela altura desejada */) / 2,
-                   width, height);
-
-            if (r.x < 0)
-                r.x = 0;
-            else if (r.x + r.width > mat.cols)
-                r.x = mat.cols - r.width;
-
-            if (r.y < 0)
-                r.y = 0;
-            else if (r.y + r.height > mat.rows)
-                r.y = mat.rows - r.height;
-
-            Mat crop = mat(r);
-            DetectedObjects d = this->classify(crop, false);
-            translate(d, r.x, r.y);
-            result.insert(result.end(), d.begin(), d.end());
-        }
-
-        std::vector<Rect> boxes;
-        std::vector<float> confidences;
-        std::vector<int> indices;
-
-        for (int i = 0; i < result.size(); i++)
-        {
-            DetectedObject obj = result[i];
-            boxes.push_back(obj.box);
-            confidences.push_back(obj.confidence);
-            
-        }
-         
-        NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);
-
-        DetectedObjects newResult;
-
-        for (size_t i = 0; i < indices.size(); ++i)
-        {
-            int idx = indices[i];
-            cout << ": Found: " << idx << " " << result[idx].type << " " << result[idx].confidence << "\n";  
-
-            newResult.push_back(result[indices[i]]);
-        }
-
-        return newResult;
-    }
-
-    return ObjectDetector::classify(mat, true);
 }
 
 void ObjectDetector::drawObject(Mat &frame, DetectedObject &obj)
@@ -324,4 +174,21 @@ void ObjectDetector::drawObject(Mat &frame, DetectedObject &obj)
     rectangle(frame, Point(obj.box.x, top - labelSize.height),
               Point(obj.box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
     putText(frame, label, Point(obj.box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
+}
+
+
+Rect ObjectDetector::getBox(DetectedObject &item)
+{
+    return item.box;
+}
+
+float ObjectDetector::getConfidence(DetectedObject &item)
+{
+    return item.confidence;
+}
+
+void ObjectDetector::translate(DetectedObject &item, int dx, int dy)
+{
+    item.box.x += dx;
+    item.box.y += dy;
 }

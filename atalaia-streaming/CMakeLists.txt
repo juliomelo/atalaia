@@ -1,4 +1,4 @@
-﻿# CMakeList.txt: projeto de CMake para Atalaia-Streaming, incluir origem e definir
+# CMakeList.txt: projeto de CMake para Atalaia-Streaming, incluir origem e definir
 # lógica específica a um projeto aqui.
 #
 cmake_minimum_required (VERSION 3.8)
@@ -15,6 +15,7 @@ add_compile_options(-Wno-deprecated-declarations)
 add_executable(atalaia-streaming
     main.hpp main.cpp
     util/BlockingQueue.hpp
+    util/ClassifierFromMovement.hpp
     recorder/VideoStream.cpp recorder/VideoStream.hpp
     recorder/MovementDetector.cpp recorder/MovementDetector.hpp
     recorder/MotionRecorder.cpp recorder/MotionRecorder.hpp

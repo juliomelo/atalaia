@@ -22,7 +22,7 @@ class ObjectRecordWriter
         ObjectRecordWriter(string file);
         virtual ~ObjectRecordWriter();
 
-        void write(unsigned int frame, DetectedObjects detectedObjects);
+        void write(unsigned int frame, vector<DetectedObject> detectedObjects);
 
     private:
         ofstream fObjects;

@@ -9,7 +9,7 @@ using namespace cv;
 
 #define matchAreaMatrix(a, b, c) matchArea[a * nTracked * 2 + b * 2 + c]
 
-void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObjects, MultiTracker *&tracker, Mat &mat)
+void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &lastObjects, MultiTracker *&tracker, Mat &mat)
 {
     vector<Rect2d> trackedObjects = tracker->getObjects();
     int nNew = newObjects.size();
@@ -137,7 +137,7 @@ void trackObjects(DetectedObjects newObjects, vector<DetectedObject> &lastObject
     }
 }
 
-void filterMovements(list<Rect> &movements, vector<Rect2d> trackedObjects, DetectedObjects &knownObjects)
+void filterMovements(list<Rect> &movements, vector<Rect2d> trackedObjects, vector<DetectedObject> &knownObjects)
 {
     for (list<Rect>::iterator it = movements.begin(); it != movements.end(); it++)
     {
@@ -171,7 +171,7 @@ void ObjectRecorder::process(string file)
         FrameQueueItem *frame = NULL;
         DetectedMovements *movements;
         MultiTracker *multiTracker = NULL;
-        DetectedObjects knownObjects;
+        vector<DetectedObject> knownObjects;
         unsigned int objectCount = 0;
 #ifdef SHOW_OBJECT_DETECTION
         bool createdWindow = false;
@@ -188,7 +188,8 @@ void ObjectRecorder::process(string file)
                 filterMovements(rects, multiTracker->getObjects(), knownObjects);
             }
 
-            DetectedObjects newObjects = objectDetector.classifyFromMovements(frame->mat, rects);
+            vector<DetectedObject> newObjectsList = objectDetector.classifyFromMovements(frame->mat, rects);
+            vector<DetectedObject> newObjects(newObjectsList.begin(), newObjectsList.end());
 
             if (multiTracker == NULL && !newObjects.empty())
             {
@@ -282,13 +283,13 @@ ObjectRecordWriter::~ObjectRecordWriter()
     this->fObjects.close();
 }
 
-void ObjectRecordWriter::write(unsigned int frame, DetectedObjects objects)
+void ObjectRecordWriter::write(unsigned int frame, vector<DetectedObject> objects)
 {
     if (!objects.empty())
     {
         this->fObjects << frame << " " << objects.size() << endl;
 
-        for (DetectedObjects::iterator it = objects.begin(); it != objects.end(); it++)
+        for (vector<DetectedObject>::iterator it = objects.begin(); it != objects.end(); it++)
         {
             DetectedObject obj = *it;
 
