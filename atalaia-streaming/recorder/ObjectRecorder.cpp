@@ -7,6 +7,11 @@
 
 using namespace cv;
 
+#define TRACKER_TYPE TrackerMOSSE
+//tracker->add(TrackerCSRT::create(), mat, dilateBox(newObjects[i].box, mat.size()));
+//tracker->add(TrackerBoosting::create(), mat, dilateBox(newObjects[i].box, mat.size()));
+//tracker->add(TrackerKCF::create(), mat, dilateBox(newObjects[i].box, mat.size()));
+
 #ifdef USE_TRACKER
 # define matchAreaMatrix(a, b, c) matchArea[a * nTracked * 2 + b * 2 + c]
 #else
@@ -14,6 +19,16 @@ using namespace cv;
 #endif
 
 #ifdef USE_TRACKER
+Rect dilateBox(Rect box, Size matSize) {
+    int size = 25;
+    int x = std::max(0, box.x - size);
+    int y = std::max(0, box.y - size);
+
+    return Rect(x, y,
+                std::min(matSize.width - x, box.width + size * 2),
+                std::min(matSize.height - y, box.height + size * 2));
+}
+
 void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &lastObjects, MultiTracker *&tracker, Mat &mat)
 #else
 void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &lastObjects, Mat &mat)
@@ -26,7 +41,6 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
     double matchArea[nNew * nTracked * 2]; // new x tracked x (new area | last area)
 
     memset(matchArea, 0, 2 * nNew * nTracked * sizeof(double));
-
 #else
     int nTracked = lastObjects.size();
     double matchArea[nNew * nTracked]; // new x tracked
@@ -94,7 +108,7 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
                 int previousArea = lastObjects[iObj].box.area();
                 int newArea = newObjects[best].box.area();
 
-                if (std::min(newArea, previousArea) / (float) std::max(newArea, previousArea) < .7)
+                if (std::min(newArea, previousArea) / (float) std::max(newArea, previousArea) >= .7) // Why?!
                     lastObjects[iObj].box = newObjects[best].box;
 
                 if (lastObjects[iObj].confidence < newObjects[best].confidence)
@@ -126,8 +140,7 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
         tracker->update(mat);
 
         for (int i = 0; i < lastObjects.size(); i++)
-            tracker->add(TrackerKCF::create(), mat, lastObjects[i].box);
-            //tracker->add(TrackerCSRT::create(), mat, lastObjects[i].box);
+            tracker->add(TRACKER_TYPE::create(), mat, lastObjects[i].box);
     }
 #endif
 
@@ -155,7 +168,7 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
             {
                 lastObjects.push_back(newObjects[i]);
 #ifdef USE_TRACKER                
-                tracker->add(TrackerKCF::create(), mat, newObjects[i].box);
+                tracker->add(TRACKER_TYPE::create(), mat, dilateBox(newObjects[i].box, mat.size()));
 #endif
             }
         }
