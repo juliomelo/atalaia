@@ -7,16 +7,32 @@
 
 using namespace cv;
 
-#define matchAreaMatrix(a, b, c) matchArea[a * nTracked * 2 + b * 2 + c]
+#ifdef USE_TRACKER
+# define matchAreaMatrix(a, b, c) matchArea[a * nTracked * 2 + b * 2 + c]
+#else
+# define matchAreaMatrix(a, b, c) matchArea[a * nTracked + b]
+#endif
 
+#ifdef USE_TRACKER
 void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &lastObjects, MultiTracker *&tracker, Mat &mat)
+#else
+void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &lastObjects, Mat &mat)
+#endif
 {
-    vector<Rect2d> trackedObjects = tracker->getObjects();
     int nNew = newObjects.size();
+#ifdef USE_TRACKER
+    vector<Rect2d> trackedObjects = tracker->getObjects();
     int nTracked = trackedObjects.size();
     double matchArea[nNew * nTracked * 2]; // new x tracked x (new area | last area)
 
     memset(matchArea, 0, 2 * nNew * nTracked * sizeof(double));
+
+#else
+    int nTracked = lastObjects.size();
+    double matchArea[nNew * nTracked]; // new x tracked
+
+    memset(matchArea, 0, nNew * nTracked * sizeof(double));
+#endif
 
     for (int i = 0; i < nNew; i++) {
         Rect doRect = newObjects[i].box;
@@ -24,8 +40,10 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
         double doArea = doRect.area();
 
         for (int j = 0; j < nTracked; j++) {
+#ifdef USE_TRACKER
             double toArea = trackedObjects[j].area();
             matchAreaMatrix(i, j, 0) = (doRect2d & trackedObjects[j]).area() / (doArea > toArea ? doArea : toArea);
+#endif
 
             double loArea = lastObjects[j].box.area();
             matchAreaMatrix(i, j, 1) = (doRect & lastObjects[j].box).area() / (doArea > loArea ? doArea : loArea);
@@ -96,9 +114,12 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
             lastObjects.erase(lastObjects.begin() + i);
             removedSome = true;
         }
+#ifdef USE_TRACKER
         else
             lastObjects[i].box = trackedObjects[i];
+#endif
 
+#ifdef USE_TRACKER
     if (removedSome) {
         delete tracker; 
         tracker = new MultiTracker();
@@ -106,7 +127,9 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
 
         for (int i = 0; i < lastObjects.size(); i++)
             tracker->add(TrackerKCF::create(), mat, lastObjects[i].box);
+            //tracker->add(TrackerCSRT::create(), mat, lastObjects[i].box);
     }
+#endif
 
     for (int i = 0; i < nNew; i++)
     {
@@ -131,7 +154,9 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
             if (!matchesNew[i] /* && newObjects[i].confidence >= .6 */)
             {
                 lastObjects.push_back(newObjects[i]);
+#ifdef USE_TRACKER                
                 tracker->add(TrackerKCF::create(), mat, newObjects[i].box);
+#endif
             }
         }
     }
@@ -170,7 +195,9 @@ void ObjectRecorder::process(string file)
         ObjectRecordWriter writer(file);
         FrameQueueItem *frame = NULL;
         DetectedMovements *movements;
+#ifdef USE_TRACKER
         MultiTracker *multiTracker = NULL;
+#endif
         vector<DetectedObject> knownObjects;
         unsigned int objectCount = 0;
 #ifdef SHOW_OBJECT_DETECTION
@@ -181,25 +208,37 @@ void ObjectRecorder::process(string file)
         {
             list<Rect> rects(movements->begin(), movements->end());
 
+#ifdef USE_TRACKER
             // Let's remove movements from tracked objects
             if (multiTracker != NULL)
             {
                 multiTracker->update(frame->mat);
                 filterMovements(rects, multiTracker->getObjects(), knownObjects);
             }
+#endif
 
             vector<DetectedObject> newObjectsList = objectDetector.classifyFromMovements(frame->mat, rects);
             vector<DetectedObject> newObjects(newObjectsList.begin(), newObjectsList.end());
 
+#ifdef USE_TRACKER
             if (multiTracker == NULL && !newObjects.empty())
             {
                 multiTracker = new MultiTracker();
                 multiTracker->update(frame->mat);
             }
+#endif
 
+#ifdef USE_TRACKER
             if (multiTracker != NULL)
+#else
+            if (newObjects.size() > 0 || knownObjects.size() > 0)
+#endif
             {
+#ifdef USE_TRACKER                
                 trackObjects(newObjects, knownObjects, multiTracker, frame->mat);
+#else
+                trackObjects(newObjects, knownObjects, frame->mat);
+#endif
             
                 for (int i = 0; i < knownObjects.size(); i++) {
                     DetectedObject *obj = &knownObjects[i];

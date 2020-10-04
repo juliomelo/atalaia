@@ -8,6 +8,7 @@
 #include <opencv2/highgui.hpp>
 #include <iostream>
 #include <opencv2/imgproc/imgproc.hpp>
+#include "../main.hpp"
 
 using namespace cv;
 using namespace dnn;
@@ -142,7 +143,7 @@ std::vector<DetectedObject> ObjectDetector::postprocess(Mat &frame, const std::v
     vector<DetectedObject> objects(boxes.size());
 
     for (size_t i = 0; i < boxes.size(); ++i)
-        objects.push_back(DetectedObject(this->classes[classIds[i]], confidences[i], boxes[i]));
+        objects[i] = DetectedObject(this->classes[classIds[i]], confidences[i], boxes[i]);
 
     return objects;
 }
