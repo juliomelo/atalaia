@@ -1,15 +1,15 @@
-FROM ubuntu:focal as base
+# FROM nvidia/cuda:11.0-cudnn8-runtime-ubuntu18.04 as base
+FROM nvidia/cuda:11.0-cudnn8-devel-ubuntu18.04 as base
 
-#RUN sed -i 's/\(deb .*\)/\1 non-free/' /etc/apt/sources.list && \
 RUN apt update && apt install -y \
-    libavdevice58 libavcodec58 \
-    libavfilter7 libavformat58 libavresample4 libavutil56 libpostproc55 libswscale5 \
+    libavdevice57 libavcodec57 \
+    libavfilter6 libavformat57 libavresample3 libavutil55 libpostproc54 libswscale4 \
     ccache yasm \
     libdc1394-utils libv4l2rds0 liblapacke libatlas3-base libopenblas-base liblapack3 \
     libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 \
-    libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module libopenexr24 \
+    libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module libopenexr22 \
     libssh-4 \
-    tesseract-ocr
+    tesseract-ocr && apt upgrade -y
 
 ###
 # IA
@@ -21,6 +21,8 @@ RUN apt update && apt install -y wget && \
     mkdir -p /data/yolo && wget -O /data/yolo/yolov3-tiny.weights https://pjreddie.com/media/files/yolov3-tiny.weights && \
     wget -O /data/yolo/yolov3-tiny.cfg https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg && \
     wget -O /data/yolo/coco.names https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
+RUN wget -O /data/yolo/yolov3.cfg https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg && \
+    wget -O /data/yolo/yolov3.weights https://pjreddie.com/media/files/yolov3.weights
 
 # Detecção de faces
 RUN mkdir /data/faces
@@ -40,15 +42,42 @@ RUN apt install -y ffmpeg cmake \
 
 ###
 # Build OpenCV
-FROM buildbase AS opencv
+FROM nvidia/cuda:11.0-cudnn8-devel-ubuntu18.04 AS opencv
 
-RUN apt install -y \
+RUN apt update && apt upgrade -y && apt autoremove -y && apt install -y \
+    libavdevice57 libavcodec57 \
+    libavfilter6 libavformat57 libavresample3 libavutil55 libpostproc54 libswscale4 \
+    ccache yasm \
+    libdc1394-utils libv4l2rds0 liblapacke libatlas3-base libopenblas-base liblapack3 \
+    libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 \
+    libgtk2.0-0 libatk1.0-0 libcanberra-gtk-module libopenexr22 \
+    libssh-4 \
+    tesseract-ocr \
+    # Dev
     libavfilter-dev libavutil-dev \
     libpostproc-dev libswscale-dev libavcodec-dev libavformat-dev libgstreamer-plugins-base1.0-dev \
     libgstreamer1.0-dev libpng-dev libjpeg-dev libopenexr-dev libtiff-dev libwebp-dev  \
     libdc1394-22-dev liblapack-dev libeigen3-dev libopenblas-dev libatlas-base-dev liblapacke-dev \
+    libxvidcore-dev x264 libx264-dev libfaac-dev libmp3lame-dev libtheora-dev \
+    libfaac-dev libmp3lame-dev libvorbis-dev \
     libgtk2.0-dev git \
-    libtesseract-dev libleptonica-dev
+    libtesseract-dev libleptonica-dev \
+    # OpenCore - Adaptive Multi Rate Narrow Band (AMRNB) and Wide Band (AMRWB) speech codec
+    libdc1394-22 libdc1394-22-dev libxine2-dev libv4l-dev v4l-utils \
+    # Cameras programming interface libs
+    libopencore-amrnb-dev libopencore-amrwb-dev \
+    # Parallelism library C++ for CPU
+    libtbb-dev \
+    # Optimization libraries for OpenCV
+    libatlas-base-dev gfortran \
+    # Optional
+    libprotobuf-dev protobuf-compiler \
+    libgoogle-glog-dev libgflags-dev \
+    libgphoto2-dev libeigen3-dev libhdf5-dev doxygen \
+    # build base
+    ffmpeg cmake \
+    build-essential pkg-config \
+    libavdevice-dev libavcodec-dev
 
 WORKDIR /usr/src
 
@@ -60,12 +89,15 @@ RUN mkdir opencv/build && \
     cmake -D CMAKE_BUILD_TYPE=Release \
           -D CMAKE_INSTALL_PREFIX=/usr/opencv \
           -D OPENCV_GENERATE_PKGCONFIG=ON \
-          -D BUILD_LIST=core,imgproc,dnn,objdetect,video,highgui,face,tracking,videoio,bgsegm \
-          -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules/ \
+          -D BUILD_JASPER=OFF -D BUILD_ZLIB=ON -D BUILD_EXAMPLES=OFF -D BUILD_opencv_java=OFF \
+          -D BUILD_LIST=core,imgproc,dnn,objdetect,video,highgui,face,tracking,videoio,bgsegm,cudev,cudastereo,cudaobjdetect,cudaimgproc,cudacodec \
+          -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
           -D WITH_OPENGL=ON \
-          -D ENABLE_FAST_MATH=1 -D WITH_CUBLAS=1 \
-          -D WITH_MKL=ON -DMKL_USE_MULTITHREAD=ON -DMKL_WITH_TBB=ON -DWITH_TBB=ON \
-    -S .. -B .
+          -D WITH_CUDA=ON -D ENABLE_FAST_MATH=1 -D CUDA_FAST_MATH=1 -D WITH_CUBLAS=1 -D WITH_CUDNN=ON -D OPENCV_DNN_CUDA=ON \
+          -D WITH_MKL=ON -D MKL_USE_MULTITHREAD=ON -D MKL_WITH_TBB=ON -D WITH_TBB=ON \
+          -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+          -D INSTALL_C_EXAMPLES=OFF -D INSTALL_TESTS=OFF \
+          ..
 
 WORKDIR /usr/src/opencv/build
 RUN make -j4 install && make clean
@@ -89,8 +121,8 @@ COPY --from=opencv /usr/opencv/ /usr/
 
 WORKDIR /usr/src/atalaia
 COPY . .
-RUN cmake -S . -B build
 WORKDIR /usr/src/atalaia/build
+RUN cmake -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.0 ..
 #RUN apt install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 RUN make -j
 
