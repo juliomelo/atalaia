@@ -191,6 +191,7 @@ void filterMovements(list<Rect> &movements, vector<Rect2d> trackedObjects, vecto
             {
                 it = movements.erase(it);
                 knownObjects[idx].missCount = 0;
+                knownObjects[idx].box = r;
                 break;
             }
         }
