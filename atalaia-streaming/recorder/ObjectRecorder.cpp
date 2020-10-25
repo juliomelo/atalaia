@@ -303,6 +303,14 @@ void ObjectRecorder::process(string file)
             delete movements;
         }
 
+#ifdef USE_TRACKER
+        if (multiTracker)
+        {
+            multiTracker->clear();
+            delete multiTracker;
+        }
+#endif
+
 #ifdef SHOW_OBJECT_DETECTION
         if (createdWindow)
             destroyWindow("objects");
@@ -310,7 +318,7 @@ void ObjectRecorder::process(string file)
     }
 
 #ifdef REMOVE_FILES
-    if (objectTypes.size() == 0)
+    if (objectTypes.empty())
     {
         const char *extensions[] = { ".mp4", ".movements", ".objects", NULL };
 
