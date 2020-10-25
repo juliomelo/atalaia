@@ -178,7 +178,7 @@ class ClassifierFromMovement
                 int idx = indices[i];
                 cout << ": Found: " << idx << " " << resultVector[idx].type << " " << resultVector[idx].confidence << "\n";
 
-                newResult.push_back(resultVector[indices[i]]);
+                newResult[i] = resultVector[indices[i]];
             }
 
             return newResult;
