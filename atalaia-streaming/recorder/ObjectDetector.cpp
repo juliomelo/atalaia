@@ -16,7 +16,7 @@ using namespace dnn;
 #define CLASSIFY_FACTOR 8
 
 ObjectDetector::ObjectDetector(string modelPath, string configPath, string classesPath, Size size, float classifyFactor, double confThreshold, double nmsThreshold)
-: ClassifierFromMovement(size, classifyFactor, true, confThreshold, nmsThreshold)
+: ClassifierFromMovement(size, classifyFactor, false, confThreshold, nmsThreshold)
 {
     ifstream ifs(classesPath.c_str());
     string line;
@@ -49,7 +49,7 @@ inline void ObjectDetector::preprocess(const Mat &originalFrame, Net &net, Size 
     //blobFromImage(frame, blob, 1.0, inpSize, Scalar(), false, false);
     blobFromImage(frame, blob, 1.0 / 255.0, inpSize, Scalar(), true, false);
 
-#ifdef SHOW_OBJECT_DETECTION
+#ifdef SHOW_OBJECT_DETECTION_NET
     imshow("net", frame);
     waitKey(25);
 #endif

@@ -217,86 +217,107 @@ void ObjectRecorder::process(string file)
 #ifdef SHOW_OBJECT_DETECTION
         bool createdWindow = false;
 #endif
+        int quietCount = 0;             // # of consecutive frames without movement
+        int nothingCount = 0;           // # of consecutive frames without detected object
+        int fast = 0;                   // bitwise flag for fast mode
 
         while (reader.readNext(frame, movements))
         {
             list<Rect> rects(movements->begin(), movements->end());
 
+            if (!movements->empty())
+                quietCount = 0;
+
 #ifdef USE_TRACKER
             // Let's remove movements from tracked objects
-            if (multiTracker != NULL)
+            if (multiTracker != NULL && !movements->empty())
             {
                 multiTracker->update(frame->mat);
                 filterMovements(rects, multiTracker->getObjects(), knownObjects);
             }
 #endif
 
-            vector<DetectedObject> newObjectsList = objectDetector.classifyFromMovements(frame->mat, rects);
-            vector<DetectedObject> newObjects(newObjectsList.begin(), newObjectsList.end());
-
-#ifdef USE_TRACKER
-            if (multiTracker == NULL && !newObjects.empty())
+            if ((fast && frame->frameCount % 3 == 0) || (!fast && (!movements->empty() || ++quietCount < 5 || quietCount % 5 != 0)))
             {
-                multiTracker = new MultiTracker();
-                multiTracker->update(frame->mat);
-            }
-#endif
+                vector<DetectedObject> newObjectsList = objectDetector.classifyFromMovements(frame->mat, rects);
+                vector<DetectedObject> newObjects(newObjectsList.begin(), newObjectsList.end());
 
 #ifdef USE_TRACKER
-            if (multiTracker != NULL)
+                if (multiTracker == NULL && !newObjects.empty())
+                {
+                    multiTracker = new MultiTracker();
+                    multiTracker->update(frame->mat);
+                }
+#endif
+                if (newObjects.empty()) {
+                    if (++nothingCount % 15 == 0) {
+                        fast |= 1;
+                    } else if (nothingCount % 61 == 0) {
+                        fast &= ~1;
+                    }
+                } else {
+                    nothingCount = 0;
+                }
+
+#ifdef USE_TRACKER
+                if (multiTracker != NULL)
 #else
-            if (newObjects.size() > 0 || knownObjects.size() > 0)
+                if (newObjects.size() > 0 || knownObjects.size() > 0)
 #endif
-            {
+                {
 #ifdef USE_TRACKER                
-                trackObjects(newObjects, knownObjects, multiTracker, frame->mat);
+                    trackObjects(newObjects, knownObjects, multiTracker, frame->mat);
 #else
-                trackObjects(newObjects, knownObjects, frame->mat);
+                    trackObjects(newObjects, knownObjects, frame->mat);
 #endif
             
-                for (int i = 0; i < knownObjects.size(); i++) {
-                    DetectedObject *obj = &knownObjects[i];
+                    for (int i = 0; i < knownObjects.size(); i++) {
+                        DetectedObject *obj = &knownObjects[i];
 
-                    if (obj->id == 0)
-                        obj->id = ++objectCount;
+                        if (obj->id == 0)
+                            obj->id = ++objectCount;
 
 #ifdef SHOW_OBJECT_DETECTION
-                    rectangle(frame->mat, obj->box, obj->missCount > 0 ? Scalar(0, 0, 255) : Scalar(0, 255, 0));
+                        rectangle(frame->mat, obj->box, obj->missCount > 0 ? Scalar(0, 0, 255) : Scalar(0, 255, 0));
 
-                    std::string label = format("Obj %d: %s (c: %f; m: %d)", obj->id, obj->type.c_str(), obj->confidence, obj->missCount);
-                    // cout << label << " Rect: [" << obj->box.x << ", " << obj->box.y << "; " << obj->box.x + obj->box.width << ", " << obj->box.y + obj->box.height << "]\n";
+                        std::string label = format("Obj %d: %s (c: %f; m: %d)", obj->id, obj->type.c_str(), obj->confidence, obj->missCount);
+                        // cout << label << " Rect: [" << obj->box.x << ", " << obj->box.y << "; " << obj->box.x + obj->box.width << ", " << obj->box.y + obj->box.height << "]\n";
 
-                    int baseLine;
-                    Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+                        int baseLine;
+                        Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 
-                    int top = std::max((int)obj->box.y, labelSize.height);
-                    rectangle(frame->mat, Point(obj->box.x, top),
-                                Point(obj->box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
-                    putText(frame->mat, label, Point(obj->box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
+                        int top = std::max((int)obj->box.y, labelSize.height);
+                        rectangle(frame->mat, Point(obj->box.x, top),
+                                    Point(obj->box.x + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
+                        putText(frame->mat, label, Point(obj->box.x, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
 #endif
 
-                    if (objectTypes.count(obj->type) == 0)
-                    {
-                        objectTypes.insert(obj->type);
+                        if (objectTypes.count(obj->type) == 0)
+                        {
+                            objectTypes.insert(obj->type);
 
-                        if (this->notifier != NULL)
-                            this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
+                            if (this->notifier != NULL)
+                                this->notifier->notify(file, NotifyEvent::OBJECT, obj->type);
+
+                            if (obj->type == "person")
+                                fast = ~0;
+                        }
                     }
                 }
-            }
 
 #ifdef SHOW_OBJECT_DETECTION
-            // cout << "---[ Frame " << frame->frameCount << " ]---" << endl;
+                // cout << "---[ Frame " << frame->frameCount << " ]---" << endl;
 
-            for (int i = 0; i < movements->size(); i++)
-                polylines(frame->mat, (*movements)[i].contour, true, Scalar(0, 0, 255));
+                for (int i = 0; i < movements->size(); i++)
+                    polylines(frame->mat, (*movements)[i].contour, true, Scalar(0, 0, 255));
 
-            Mat show;
-            resize(frame->mat, show, Size(640, 480));
-            imshow("objects", show);
-            waitKey(25);
-            createdWindow = true;
+                Mat show;
+                resize(frame->mat, show, Size(640, 480));
+                imshow("objects", show);
+                waitKey(25);
+                createdWindow = true;
 #endif
+            }
 
             writer.write(frame->frameCount, knownObjects);
 
@@ -321,11 +342,14 @@ void ObjectRecorder::process(string file)
 #ifdef REMOVE_FILES
     if (objectTypes.empty())
     {
+        cout << "Discarding video...\n";
+        
         const char *extensions[] = { ".mp4", ".movements", ".objects", NULL };
 
         for (const char **extension = extensions; *extension; extension++)
         {
             string toRemove = file + *extension;
+            cout << "Deleting " << toRemove << "\n";
             remove(toRemove.c_str());
         }
     }

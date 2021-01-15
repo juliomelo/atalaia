@@ -36,6 +36,9 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
     int64_t videoTimeThreshold = 0;
     int64_t lastKeyFrame = 0;
     std::list<AVPacket *> waitingMovement;
+#ifdef SHOW_MOVEMENT_DETECTION
+    uint frames = 0;
+#endif
 
     do
     {
@@ -62,6 +65,7 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
         }
 
 #ifdef SHOW_MOVEMENT_DETECTION
+        if (frames++ % 15 == 0 || !movements.empty()) {
         for (int i = 0; i < movements.size(); i++)
         {
                 polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
@@ -72,6 +76,7 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
         resize(item->mat, show, Size(480, 320));
         imshow("movement", show);
         waitKey(25);
+        }
 #endif
 
         if (!movements.empty())
