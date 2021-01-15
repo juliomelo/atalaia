@@ -323,7 +323,7 @@ void ObjectRecorder::process(string file)
     {
         const char *extensions[] = { ".mp4", ".movements", ".objects", NULL };
 
-        for (const char **extension = extensions; extension; extension++)
+        for (const char **extension = extensions; *extension; extension++)
         {
             string toRemove = file + *extension;
             remove(toRemove.c_str());
