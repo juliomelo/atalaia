@@ -1,14 +1,24 @@
 {
-    "dockerComposeFile": "docker-compose.yml", 
+    "dockerComposeFile": "docker-compose.yml",
     "service": "atalaia-devcontainer",
     "name": "atalaia-streaming",
-    "extensions": [
-        "ms-vscode.cpptools", "ms-vscode.cmake-tools"
-    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools"
+            ]
+        }
+    },
     "containerEnv": {
         "DISPLAY": "${env:DISPLAY}"
     },
-    "runArgs": ["--net", "host", "-v", "/tmp/.X11-unix:/tmp/.X11-unix"],
+    "runArgs": [
+        "--net",
+        "host",
+        "-v",
+        "/tmp/.X11-unix:/tmp/.X11-unix"
+    ],
     "workspaceFolder": "/workspace",
     "shutdownAction": "stopCompose"
 }
