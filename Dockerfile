@@ -72,19 +72,19 @@ RUN make -j4 install && make clean
 
 ###
 # Atalaia build-base
-FROM buildbase as atalaiaBuildBase
+FROM buildbase as atalaiabuildbase
 RUN apt install -y libssh-dev
 
 ###
 # DevContainer
-FROM atalaiaBuildBase as devcontainer
+FROM atalaiabuildbase as devcontainer
 RUN apt install -y git vim less gdb amqp-tools
 COPY --from=opencv /usr/opencv/ /usr/
 COPY --from=ia /data /data
 
 ###
 # Build
-FROM atalaiaBuildBase as build
+FROM atalaiabuildbase as build
 COPY --from=opencv /usr/opencv/ /usr/
 
 WORKDIR /usr/src/atalaia
