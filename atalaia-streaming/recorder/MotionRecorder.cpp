@@ -169,7 +169,12 @@ Record::Record(AVStream *i_video_stream)
 
     this->data.open(data);
 
-    avformat_alloc_output_context2(&this->o_fmt_ctx, NULL, NULL, video.c_str());
+    if (avformat_alloc_output_context2(&this->o_fmt_ctx, NULL, NULL, video.c_str()) < 0)
+    {
+        cerr << "Can't create output context." << endl;
+    }
+
+    cout << "Creating " << video << endl;
 
     /*
     * since all input files are supposed to be identical (framerate, dimension, color format, ...)
@@ -182,11 +187,14 @@ Record::Record(AVStream *i_video_stream)
         avcodec_parameters_copy(c, i_video_stream->codecpar);
     }
 
-    avio_open(&o_fmt_ctx->pb, video.c_str(), AVIO_FLAG_WRITE);
+    if (avio_open(&o_fmt_ctx->pb, video.c_str(), AVIO_FLAG_WRITE) < 0)
+    {
+        cerr << "Can't open output file." << endl;
+    }
 
     if (avformat_write_header(o_fmt_ctx, NULL) < 0)
     {
-        cerr << "Can't write header.\n";
+        cerr << "Can't write header." << endl;
     }
 }
 

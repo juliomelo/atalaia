@@ -26,7 +26,7 @@ then
 	then
 		rm ${file}.scale.mp4
 		set -x
-	   	curl -o - -F "video=@${file}.mp4" -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendVideo?chat_id=${TELEGRAM_CHAT_ID}"
+	   	curl -F "video=@${file}.mp4" -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendVideo?chat_id=${TELEGRAM_CHAT_ID}"
 		exit 0
 	fi
 fi
@@ -34,9 +34,11 @@ fi
 #if [ $size -gt 20971520 ]
 #then
     set -x
-    curl -o - -F "video=@${file}.scale.mp4" -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendVideo?chat_id=${TELEGRAM_CHAT_ID}"
+    curl -F "video=@${file}.scale.mp4" -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendVideo?chat_id=${TELEGRAM_CHAT_ID}"
     rm ${file}.scale.mp4
 #else
 #    set -x
 #    curl -o - -F "animation=@${file}.scale.mp4" -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendAnimation?chat_id=${TELEGRAM_CHAT_ID}"
 #fi
+
+rm ${file}.mp4

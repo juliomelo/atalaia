@@ -26,6 +26,8 @@ int monitorMovements(int argc, char **argv)
 	if (argc < 2)
 	{
 		cerr << "Sintax: atalaia-streaming movements <amqp url> <video url> [...video url]" << endl;
+		cerr << "        atalaia-streaming movements <amqp url> -f <urls file>" << endl;
+		cerr << "        atalaia-streaming movements <ampq url> -e <environment variable>" << endl;
 		return -1;
 	}
 
@@ -41,6 +43,20 @@ int monitorMovements(int argc, char **argv)
 		string url;
 
 		while (getline(urls, url))
+		{
+			VideoStream *stream = new VideoStream();
+			streams.push_back(stream);
+			stream->start(url, new VideoStreamQueue());
+		}
+	}
+	else if (argc == 3 && strcmp(argv[1], "-e") == 0)
+	{
+		const char *var = std::getenv(argv[2]);
+
+		cout << "Using environment variable " << argv[2] << ": " << var << endl;
+		char *value = strdup(var);
+
+		for (char *url = strsep(&value, " "); url; url = strsep(&value, " "))
 		{
 			VideoStream *stream = new VideoStream();
 			streams.push_back(stream);

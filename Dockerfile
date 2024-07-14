@@ -1,4 +1,4 @@
-FROM ubuntu:focal as base
+FROM ubuntu:focal AS base
 
 #RUN sed -i 's/\(deb .*\)/\1 non-free/' /etc/apt/sources.list && \
 RUN apt update && apt install -y \
@@ -13,7 +13,7 @@ RUN apt update && apt install -y \
 
 ###
 # IA
-FROM ubuntu:focal as ia    
+FROM ubuntu:focal AS ia    
 
 # Install Yolo v3
 # https://pjreddie.com/darknet/yolo/
@@ -30,7 +30,7 @@ RUN wget -O /data/faces/openface.nn4.small2.v1.t7 https://raw.githubusercontent.
 
 ###
 # Common lib for build
-FROM base as buildbase
+FROM base AS buildbase
 
 RUN apt install -y ffmpeg cmake \
     #procps iproute2 net-tools \
@@ -72,19 +72,20 @@ RUN make -j4 install && make clean
 
 ###
 # Atalaia build-base
-FROM buildbase as atalaiabuildbase
+FROM buildbase AS atalaiabuildbase
 RUN apt install -y libssh-dev
 
 ###
 # DevContainer
-FROM atalaiabuildbase as devcontainer
-RUN apt install -y git vim less gdb amqp-tools
+FROM atalaiabuildbase AS devcontainer
+RUN echo y | unminimize && apt install -y git vim less gdb amqp-tools man-db
 COPY --from=opencv /usr/opencv/ /usr/
-COPY --from=ia /data /data
+COPY --from=ia /data /workspace/data
+RUN mkdir -p /workspace/data/local
 
 ###
 # Build
-FROM atalaiabuildbase as build
+FROM atalaiabuildbase AS build
 COPY --from=opencv /usr/opencv/ /usr/
 
 WORKDIR /usr/src/atalaia
@@ -96,7 +97,7 @@ RUN make -j
 
 ###
 # Final
-FROM base as final
+FROM base AS final
 
 RUN mkdir -p /data/local
 COPY --from=opencv /usr/opencv/ /usr/
