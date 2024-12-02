@@ -9,12 +9,11 @@ services:
             - seccomp:unconfined
         command: movements amqp://rabbitmq -e ATALAIA_URLS 
         volumes:
-            # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
-            # mounts are relative to the first file in the list, which is a level up.
             - /tmp/.X11-unix:/tmp/.X11-unix
             - recording:/data/local
         environment:
             DISPLAY: :0
+        restart: on-failure
         depends_on:
             rabbitmq:
                 condition: service_healthy
@@ -33,12 +32,11 @@ services:
             - seccomp:unconfined
         command: objects amqp://rabbitmq 
         volumes:
-            # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
-            # mounts are relative to the first file in the list, which is a level up.
             - /tmp/.X11-unix:/tmp/.X11-unix
             - recording:/data/local
         environment:
             DISPLAY: :0
+        restart: on-failure
         depends_on:
             rabbitmq:
                 condition: service_healthy
@@ -49,9 +47,10 @@ services:
         image: rabbitmq:3.8.3-alpine
         # networks:
         #     - atalaia-services
+        restart: unless-stopped
         healthcheck:
             test: ["CMD", "rabbitmqctl", "eval", "{ true, rabbit_app_booted_and_running } = { rabbit:is_booted(node()), rabbit_app_booted_and_running }, { [], no_alarms } = { rabbit:alarms(), no_alarms }, [] /= rabbit_networking:active_listeners(), rabbitmq_node_is_healthy."]
-            interval: 1m30s
+            interval: 15s
             timeout: 30s
             retries: 5
             start_period: 10s
@@ -62,6 +61,7 @@ services:
             context: telegram-reporter
         volumes:
             - recording:/data/local
+        restart: unless-stopped
         depends_on:
             rabbitmq:
                 condition: service_healthy
