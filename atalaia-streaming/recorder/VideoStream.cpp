@@ -207,6 +207,7 @@ void VideoStream::threadProcess(VideoStream *data)
         av_packet_unref(&packet);
         av_init_packet(&packet);
 
+#ifdef SHOW_FPS
         long long ellapsed = now - start;
 
         if (ellapsed >= 1000 * 15)
@@ -215,6 +216,7 @@ void VideoStream::threadProcess(VideoStream *data)
             frames = 0;
             start = now;
         }
+#endif
     }
 
     cout << "Stopping " << data->url << "...\n";
