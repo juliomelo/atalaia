@@ -33,6 +33,7 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 #endif
     Record *record = NULL;
     int64_t dontStopUntil = 0;
+    int64_t nextDetection = 0;
     int64_t videoTimeThreshold = 0;
     int64_t lastKeyFrame = 0;
     std::list<AVPacket *> waitingMovement;
@@ -50,7 +51,9 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
            break;
         }
 
-        DetectedMovements movements = item->mat.empty() ? DetectedMovements() : movementDetector.detectMovement(item->mat);
+        DetectedMovements movements = (item->mat.empty() || (!record && nextDetection && item->packet->pts < nextDetection))
+            ? DetectedMovements()
+            : movementDetector.detectMovement(item->mat);
 
         if (item->packet->flags & AV_PKT_FLAG_KEY) // Keyframe
         {
@@ -103,6 +106,8 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
             }
 
             record->writePacket(item->packet, &movements);
+        } else if (!record && !item->mat.empty() && item->packet->pts > nextDetection) {
+            nextDetection = item->packet->pts + MOVEMENT_PERIOD_WATCH / (item->time_base.num / (float)item->time_base.den);
         }
 
 #ifdef KEEP_PACKAGES_AFTER_KEYFRAME

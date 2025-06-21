@@ -12,7 +12,7 @@ using namespace std;
 class MotionRecorder
 {
     public:
-        MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds = 5);
+        MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds = 10);
         ~MotionRecorder();
 
     private:
