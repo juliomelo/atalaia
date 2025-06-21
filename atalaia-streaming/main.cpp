@@ -78,6 +78,8 @@ int monitorMovements(int argc, char **argv)
 	for (list<VideoStream *>::iterator it = streams.begin(); it != streams.end(); ++it)
 		recorders.push_back(new MotionRecorder(*it, &notifier));
 
+	bool failure = false;
+
 	while (!terminating)
 	{
 		notifier.getConnection()->heartbeat();
@@ -86,8 +88,11 @@ int monitorMovements(int argc, char **argv)
 		for (list<VideoStream *>::iterator it = streams.begin(); it != streams.end(); it++)
 			switch ((*it)->getState())
 			{
-				case VideoState::SHUTDOWN:
 				case VideoState::FAILURE:
+					failure = true;
+					// yeah, proceed to next case switch
+
+				case VideoState::SHUTDOWN:
 					cout << "VideoState is " << (*it)->getState() << endl;
 					terminating = true;
 					break;
@@ -106,7 +111,7 @@ int monitorMovements(int argc, char **argv)
 	for (list<MotionRecorder *>::iterator it = recorders.begin(); it != recorders.end(); ++it)
 		delete *it;
 
-	return 0;
+	return failure ? -1 : 0;
 }
 
 int monitorObjects(int argc, char **argv)

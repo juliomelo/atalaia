@@ -1,11 +1,12 @@
-#pragma once
+﻿#pragma once
 
 #define REMOVE_FILES
 #define KEEP_PACKAGES_AFTER_KEYFRAME
-#define SHOW_MOVEMENT_DETECTION
-#define SHOW_OBJECT_DETECTION
+#undef SHOW_MOVEMENT_DETECTION
+#undef SHOW_OBJECT_DETECTION
 #undef SHOW_OBJECT_DETECTION_NET
 #define USE_TRACKER
 #undef SHOW_FPS
+#undef VERBOSE
 
 extern bool terminating;

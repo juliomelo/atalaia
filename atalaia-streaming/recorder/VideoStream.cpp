@@ -107,6 +107,7 @@ void VideoStream::threadProcess(VideoStream *data)
         return;
     }
 
+#ifdef VERBOSE
     std::cout
         << "url: " << data->url << "\n"
         << "format: " << data->format_ctx->iformat->name << "\n"
@@ -117,6 +118,7 @@ void VideoStream::threadProcess(VideoStream *data)
         //		<< "pixfmt: " << av_get_pix_fmt_name(vstrm->codec->pix_fmt) << "\n"
         << "frame:  " << vstrm->nb_frames << "\n"
         << std::flush;
+#endif
 
     av_read_play(data->format_ctx); //play RTSP
 
