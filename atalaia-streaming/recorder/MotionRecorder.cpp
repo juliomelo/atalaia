@@ -179,7 +179,9 @@ Record::Record(AVStream *i_video_stream)
         cerr << "Can't create output context." << endl;
     }
 
+#ifdef VERBOSE
     cout << "Creating " << video << endl;
+#endif
 
     /*
     * since all input files are supposed to be identical (framerate, dimension, color format, ...)

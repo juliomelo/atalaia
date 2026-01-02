@@ -176,9 +176,12 @@ class ClassifierFromMovement
             for (size_t i = 0; i < indices.size(); ++i)
             {
                 int idx = indices[i];
-                cout << ": Found: " << idx << " " << resultVector[idx].type << " " << resultVector[idx].confidence << "\n";
 
-                newResult[i] = resultVector[indices[i]];
+#ifdef VERBOSE
+                cout << ": Found: " << idx << " " << resultVector[idx].type << " " << resultVector[idx].confidence << "\n";
+#endif
+
+                newResult[i] = resultVector[idx];
             }
 
             return newResult;

@@ -25,7 +25,7 @@ int monitorMovements(int argc, char **argv)
 {
 	if (argc < 2)
 	{
-		cerr << "Sintax: atalaia-streaming movements <amqp url> <video url> [...video url]" << endl;
+		cerr << "Syntax: atalaia-streaming movements <amqp url> <video url> [...video url]" << endl;
 		cerr << "        atalaia-streaming movements <amqp url> -f <urls file>" << endl;
 		cerr << "        atalaia-streaming movements <ampq url> -e <environment variable>" << endl;
 		return -1;
@@ -38,7 +38,9 @@ int monitorMovements(int argc, char **argv)
 
 	if (argc == 3 && strcmp(argv[1], "-f") == 0)
 	{
+#ifdef VERBOSE
 		cout << "Monitoring URL's from file " << argv[2] << endl;
+#endif
 		ifstream urls(argv[2]);
 		string url;
 
@@ -53,7 +55,9 @@ int monitorMovements(int argc, char **argv)
 	{
 		const char *var = std::getenv(argv[2]);
 
+#ifdef VERBOSE
 		cout << "Using environment variable " << argv[2] << ": " << var << endl;
+#endif
 		char *value = strdup(var);
 
 		for (char *url = strsep(&value, " "); url; url = strsep(&value, " "))
@@ -71,7 +75,9 @@ int monitorMovements(int argc, char **argv)
 			stream->start(argv[i], new VideoStreamQueue());
 		}
 
+#ifdef VERBOSE
 	cout << "Monitoring " << streams.size() << " video streams" << endl;
+#endif
 
 	list<MotionRecorder *> recorders;
 
@@ -93,7 +99,9 @@ int monitorMovements(int argc, char **argv)
 					// yeah, proceed to next case switch
 
 				case VideoState::SHUTDOWN:
+#ifdef VERBOSE
 					cout << "VideoState is " << (*it)->getState() << endl;
+#endif
 					terminating = true;
 					break;
 			}
@@ -118,20 +126,25 @@ int monitorObjects(int argc, char **argv)
 {
 	if (argc != 1)
 	{
-		cerr << "Sintax: atalaia-streaming objects <amqp url|file path>" << endl;
+		cerr << "Syntax: atalaia-streaming objects <amqp url|file path>" << endl;
 		return -1;
 	}
 
 	if (strncmp(argv[0], "amqp://", 7) == 0)
 	{
+#ifdef VERBOSE
 		cout << "Connecting to " << argv[0] << endl;
-		
+#endif
+
 		AMQPNotifier notifier(argv[0]);
 		ObjectRecorder recorder(&notifier);
 
 		notifier.getChannel()->consume("movement").onReceived([&notifier, &recorder](const AMQP::Message &message, uint64_t deliveryTag, bool redelivered) {
 			string file(message.body(), message.bodySize());
+
+#ifdef VERBOSE
 			cout << "Received message: " << file << endl;
+#endif
 
 			if (std::filesystem::exists(file + ".mp4") && std::filesystem::exists(file + ".movements"))
 				recorder.process(file);
@@ -150,7 +163,9 @@ int monitorObjects(int argc, char **argv)
 	}
 	else
 	{
+#ifdef VERBOSE
 		cout << "Processing " << argv[0] << endl;
+#endif
 		LocalNotifier notifier;
 		ObjectRecorder recorder(&notifier);
 		recorder.process(argv[0]);
@@ -176,7 +191,7 @@ int main(int argc, char **argv)
 	};
 
 	if (argc < 2) {
-		cerr << "Sintax: atalaia-streaming <command> [args]" << endl;
+		cerr << "Syntax: atalaia-streaming <command> [args]" << endl;
 		return EXIT_FAILURE;
 	}
 
@@ -199,7 +214,9 @@ int main(int argc, char **argv)
 		cerr << "Unknown command: " << argv[1];
 	}
 
+#ifdef VERBOSE
 	cout << "Local processing: " << argv[1] << endl;
+#endif
 
 	VideoStreamQueue *queue[argc - 1];
 	VideoStream *stream[argc - 1];

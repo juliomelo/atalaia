@@ -200,7 +200,9 @@ void filterMovements(list<Rect> &movements, vector<Rect2d> trackedObjects, vecto
 
 void ObjectRecorder::process(string file)
 {
+#ifdef VERBOSE
     cout << "Processing " << file << "\n";
+#endif
 
     std::set<string> objectTypes;
 
@@ -342,20 +344,28 @@ void ObjectRecorder::process(string file)
 #ifdef REMOVE_FILES
     if (objectTypes.empty())
     {
+# ifdef DEBUG
         cout << "Discarding video...\n";
-        
+# endif
+
         const char *extensions[] = { ".mp4", ".movements", ".objects", NULL };
 
         for (const char **extension = extensions; *extension; extension++)
         {
             string toRemove = file + *extension;
+
+# ifdef DEBUG
             cout << "Deleting " << toRemove << "\n";
+# endif
+
             remove(toRemove.c_str());
         }
     }
 #endif
 
+#ifdef VERBOSE
     cout << "Processed " << file << "\n";
+#endif
 }
 
 ObjectRecordWriter::ObjectRecordWriter(string file)

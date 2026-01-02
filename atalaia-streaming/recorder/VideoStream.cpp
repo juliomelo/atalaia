@@ -42,6 +42,7 @@ int VideoStream::start(std::string url, BlockingQueue<FrameQueueItem *> *queue)
 void VideoStream::threadProcess(VideoStream *data)
 {
     cout << "Connecting to " << data->url << "...\n";
+#endif
 
     data->threadState = PROCESSING;
     AVDictionary *opts = NULL;
@@ -61,7 +62,9 @@ void VideoStream::threadProcess(VideoStream *data)
             return;
         }
 
+#ifdef VERBOSE
         cout << "Connected without TCP: " << data->url << "\n";
+#endif
     }
 
     if (!data->format_ctx)
@@ -145,16 +148,21 @@ void VideoStream::threadProcess(VideoStream *data)
     avpicture_fill(reinterpret_cast<AVPicture *>(frame), data->framebuf.data(), dst_pix_fmt, dst_width, dst_height);
 
     AVFrame *decframe = av_frame_alloc();
-    long long start = current_timestamp();
-    long long now;
     uint frames = 0;
 
     AVPacket packet;
     av_init_packet(&packet);
 
-    while (!terminating && data->threadState == PROCESSING && av_read_frame(data->format_ctx, &packet) >= 0)
+#ifdef SHOW_FPS
+    long long start = current_timestamp();
+    long long now;
+#endif
+
+    while (!terminating && !data->queue->isClosed() && data->threadState == PROCESSING && av_read_frame(data->format_ctx, &packet) >= 0)
     {
+#ifdef SHOW_FPS
         now = current_timestamp();
+#endif
 
         if (packet.stream_index == VideoStream_index)
         {
@@ -221,7 +229,9 @@ void VideoStream::threadProcess(VideoStream *data)
 #endif
     }
 
+#ifdef VERBOSE
     cout << "Stopping " << data->url << "...\n";
+#endif
 
     av_frame_free(&frame);
     av_frame_free(&decframe);
@@ -247,7 +257,9 @@ void VideoStream::threadProcess(VideoStream *data)
 
 VideoStream::~VideoStream()
 {
+#ifdef VERBOSE
     cout << "VideoStream Shutdown\n";
+#endif
 
     if (this->thread)
     {

@@ -31,7 +31,9 @@ public:
     {
         if (closed || terminating)
         {
+#ifdef VERBOSE
             std::cout << "Queue is closed." << std::endl;
+#endif
             return false;
         }
         else
@@ -79,8 +81,17 @@ public:
 
     void close()
     {
-        std::cout << "Closed blocking queue!\n";
-        this->closed = true;
+        if (!this->closed) {
+#ifdef VERBOSE
+            std::cout << "Blocking queue is now closed!" << std::endl;
+#endif
+            this->closed = true;
+        } else {
+#ifdef VERBOSE
+            std::cout << "Blocking queue was already closed." << std::endl;
+#endif
+        }
+        
         this->_condition.notify_all();
     }
 

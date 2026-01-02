@@ -13,7 +13,9 @@ private:
     */
     virtual void onConnected(AMQP::TcpConnection *connection)
     {
+#ifdef DEBUG
         std::cout << "connected" << std::endl;
+#endif
     }
 
     /**
@@ -39,7 +41,9 @@ private:
      */
     virtual void onClosed(AMQP::TcpConnection *connection)
     {
+#ifdef DEBUG
         std::cout << "closed" << std::endl;
+#endif
     }
 
     /**
@@ -50,7 +54,9 @@ private:
      */
     virtual void monitor(AMQP::TcpConnection *connection, int fd, int flags)
     {
+#ifdef DEBUG
         std::cout << "amqp monitor - fd: " << fd << "; flags: " << flags << std::endl;
+#endif
 
         this->connection = connection;
 
