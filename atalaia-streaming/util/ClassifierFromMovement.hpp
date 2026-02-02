@@ -7,6 +7,7 @@
 #include "math.h"
 #include <iostream>
 #include <opencv2/dnn.hpp>
+#include <limits>
 
 template <class TResult>
 class ClassifierFromMovement
@@ -74,7 +75,7 @@ class ClassifierFromMovement
                 // Classify smaller rectangles
                 while (!rects.empty())
                 {
-                    uint x1 = ~0, y1 = ~0;
+                    int x1 = std::numeric_limits<int>::max(), y1 = std::numeric_limits<int>::max();
 
                     for (list<Rect>::iterator it = rects.begin(); it != rects.end(); ++it)
                     {
@@ -84,9 +85,9 @@ class ClassifierFromMovement
                         y1 = y1 < r.y ? y1 : r.y;
                     }
 
-                    uint maxX2 = x1 + maxSize;
-                    uint maxY2 = y1 + maxSize;
-                    uint x2 = 0, y2 = 0;
+                    int maxX2 = x1 + maxSize;
+                    int maxY2 = y1 + maxSize;
+                    int x2 = 0, y2 = 0;
 
                     // Let's classify every object in the viewport.
                     for (list<Rect>::iterator it = rects.begin(); it != rects.end();)
@@ -95,8 +96,8 @@ class ClassifierFromMovement
 
                         if (r.x >= x1 && r.x + r.width <= maxX2 && r.y >= y1 && r.y + r.height <= maxY2)
                         {
-                            x2 = std::max(x2, (uint) r.x + r.width);
-                            y2 = std::max(y2, (uint) r.y + r.height);
+                            x2 = std::max(x2, r.x + r.width);
+                            y2 = std::max(y2, r.y + r.height);
                             it = rects.erase(it);
                         } else {
                             ++it;
@@ -116,7 +117,7 @@ class ClassifierFromMovement
 
                     // Let's center the image
                     float newRatio = (x2 - x1) / (float) (y2 - y1);
-                    bool invert = ratio >= 1 && newRatio < 1 || ratio < 1 && newRatio >= 1;
+                    bool invert = (ratio >= 1 && newRatio < 1) || (ratio < 1 && newRatio >= 1);
                     uint width = std::max((uint) size.width, invert ? (uint) (ratio * (y2 - y1)) : x2 - x1);
                     uint height = std::max((uint) size.height, invert ? y2 - y1 : (uint) (invertedRatio * width));
 
@@ -137,7 +138,7 @@ class ClassifierFromMovement
                     Mat crop = mat(r);
                     vector<TResult> d = this->classify(crop);
 
-                    for (int i = 0; i < d.size(); i++)
+                    for (size_t i = 0; i < d.size(); i++)
                     {
                         TResult item = d[i];
                         this->translate(item, r.x, r.y);
@@ -161,7 +162,7 @@ class ClassifierFromMovement
             std::vector<float> confidences;
             std::vector<int> indices;
 
-            for (int i = 0; i < resultVector.size(); i++)
+            for (size_t i = 0; i < resultVector.size(); i++)
             {
                 TResult obj = resultVector[i];
                 boxes.push_back(this->getBox(obj));

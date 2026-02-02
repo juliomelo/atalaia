@@ -18,14 +18,15 @@ void Listener::waitShutdown(bool close)
 {
     if (close)
         this->queue.close();
+    else
+        this->queue.waitShutdown();
 
-    this->queue.waitShutdown();
     this->thread->join();
 }
 
 void Listener::threadProcess(Listener *listener)
 {
-    while (!terminating && listener->thread) {
+    while (!terminating && !listener->queue.isClosed() && listener->thread) {
         string file = listener->queue.pop();
 
         if (file.length() == 0)

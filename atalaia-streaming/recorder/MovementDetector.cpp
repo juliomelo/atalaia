@@ -13,7 +13,8 @@ MovementDetector::MovementDetector()
 }
 
 MovementDetector::~MovementDetector() {
-    delete this->bgsubtractor;
+    // cv::Ptr handles object lifetime; do not delete manually.
+    this->bgsubtractor.release();
 }
 
 DetectedMovements MovementDetector::refineSegments(const Mat &img, Mat &mask, /*Mat &dst,*/ double scale)
@@ -32,8 +33,7 @@ DetectedMovements MovementDetector::refineSegments(const Mat &img, Mat &mask, /*
 
     // iterate through all the top-level contours,
     // draw each connected component with its own random color
-    int idx = 0, largestComp = 0;
-    double maxArea = 0;
+    int idx = 0;
     double areaThreshold = 54 * 54;
 
     DetectedMovements result;
@@ -47,7 +47,7 @@ DetectedMovements MovementDetector::refineSegments(const Mat &img, Mat &mask, /*
         {
             vector<Point> scaledContour;
 
-            for (int i = 0; i < c.size(); i++)
+            for (std::vector<cv::Point_<int>>::size_type i = 0; i < c.size(); i++)
                 scaledContour.push_back(c[i] * scale);
 
             result.push_back(DetectedMovement(scaledContour));
