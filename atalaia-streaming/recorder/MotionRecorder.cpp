@@ -9,12 +9,13 @@ using namespace std;
 
 int Record::sequence = 0;
 
-MotionRecorder::MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds)
+MotionRecorder::MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds, bool notifyThis)
 {
     shutdown = false;
     this->stream = stream;
     this->notifier = notifier;
     this->maxSeconds = maxSeconds;
+    this->notifyThis = notifyThis;
     thread = new std::thread(threadProcess, this);
 }
 
@@ -35,7 +36,6 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
     int64_t dontStopUntil = 0;
     int64_t nextDetection = 0;
     int64_t videoTimeThreshold = 0;
-    int64_t lastKeyFrame = 0;
     std::list<AVPacket *> waitingMovement;
 #ifdef SHOW_MOVEMENT_DETECTION
     uint frames = 0;
@@ -51,10 +51,6 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
            break;
         }
 
-        DetectedMovements movements = (item->mat.empty() || (!record && nextDetection && item->packet->pts < nextDetection))
-            ? DetectedMovements()
-            : movementDetector.detectMovement(item->mat);
-
         if (item->packet->flags & AV_PKT_FLAG_KEY) // Keyframe
         {
 #ifdef KEEP_PACKAGES_AFTER_KEYFRAME
@@ -63,27 +59,40 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 
             packetsFromKeyFrame.clear();
 #endif
-
-            lastKeyFrame = item->packet->pts;
         }
+
+        if (!record && recorder->passive && !recorder->notifyThis)
+        {
+            delete item;
+            continue;
+        }
+
+        DetectedMovements movements = (item->mat.empty() || (!record && nextDetection && item->packet->pts < nextDetection))
+            ? DetectedMovements()
+            : movementDetector.detectMovement(item->mat);
 
 #ifdef SHOW_MOVEMENT_DETECTION
         if (frames++ % 15 == 0 || !movements.empty()) {
-        for (int i = 0; i < movements.size(); i++)
-        {
-                polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
-                rectangle(item->mat, movements[i], Scalar(255, 0, 0));
-        }
+            for (size_t i = 0; i < movements.size(); i++)
+            {
+                    polylines(item->mat, movements[i].contour, true, Scalar(0, 0, 255));
+                    rectangle(item->mat, movements[i], Scalar(255, 0, 0));
+            }
 
-        Mat show;
-        resize(item->mat, show, Size(480, 320));
-        imshow("movement", show);
-        waitKey(25);
+            Mat show;
+            resize(item->mat, show, Size(480, 320));
+            imshow("movement", show);
+            waitKey(25);
         }
 #endif
 
-        if (!movements.empty())
+        if (!movements.empty() || (recorder->notifyThis && (!record || record->getDuration() < 1)))
         {
+#ifdef VERBOSE
+            if (recorder->notifyThis && !record)
+                cout << "[*] Forcing movement record notification" << endl;
+#endif
+
             dontStopUntil = item->packet->pts + 3.0 / (item->time_base.num / (float)item->time_base.den);
 
             if (!record)
@@ -114,7 +123,13 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
         packetsFromKeyFrame.push_back(av_packet_clone(item->packet));
 #endif
 
-        if (record && ((!item->mat.empty() && movements.empty() && item->packet->pts >= dontStopUntil) || (item->packet->flags & AV_PKT_FLAG_KEY && item->packet->pts >= videoTimeThreshold)))
+        if (record &&
+            (
+                (!item->mat.empty() && movements.empty() && item->packet->pts >= dontStopUntil)
+                || (item->packet->flags & AV_PKT_FLAG_KEY && item->packet->pts >= videoTimeThreshold)
+            )
+            && (recorder->notifyThis == false || record->getDuration() >= 1)
+        )
         {
             string filename = record->getFileName();
             int64_t duration = record->getDuration();
@@ -127,10 +142,19 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
                 av_packet_unref(*it);
 
             if (recorder->notifier && keep)
+            {
+#ifdef VERBOSE
+                cout << "Notifying movement " << filename << " - duration: " << duration << endl;
+#endif
                 recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
+                recorder->notifyThis = false;
+                movementDetector.reset();
+            }
             else
             {
+#ifdef VERBOSE
                 cout << "Discarding " << filename << " - duration: " << duration << endl;
+#endif
 
                 string mp4 = filename + ".mp4";
                 string movementsFilename = filename + ".movements";
@@ -141,8 +165,13 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 #endif
             }
         }
+        else if (record && recorder->notifyThis && record->getDuration() < 1)
+            record->writePacket(item->packet);
         else if (record && movements.empty())
-            waitingMovement.push_back(av_packet_clone(item->packet));
+        {
+            waitingMovement.push_back(item->packet);
+            item->packet = NULL;
+        }
 
         delete item;
     } while (!recorder->shutdown);
@@ -225,24 +254,40 @@ std::string Record::getFileName()
 
 void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
 {
+    // If first packet is keyframe, then use its PTS/DTS as base, but, if not, then assume 0 and calculate based on fps
+    if (this->frames == 0 && packet->dts < 0)
+    {
+        this->first_pts = 0;
+        this->first_dts = 0;
+    }
+    else
 #ifdef KEEP_PACKAGES_AFTER_KEYFRAME
-    if (this->frames++ == 0)  // Keyframe
+    if (this->frames == 0)  // Keyframe
     {
         this->first_pts = packet->pts;
         this->first_dts = packet->dts;
     }
-#else
-    if (this->frames++ <= 1)
-    {
-        this->first_pts = packet->pts + this->frames;
-        this->first_dts = packet->dts + this->frames;
-    }
 #endif
 
+    this->frames++;
+
     AVPacket *outPacket = av_packet_clone(packet);
-    outPacket->pts = av_rescale_q_rnd(outPacket->pts - first_pts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-    outPacket->dts = av_rescale_q_rnd(outPacket->dts - first_dts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-    outPacket->duration = av_rescale_q(outPacket->duration, this->i_video_stream->time_base, this->o_video_stream->time_base);
+
+    if (this->first_pts == 0)
+    {
+        AVRational fps = this->i_video_stream->r_frame_rate;
+        int64_t frame_duration = av_rescale_q(1, av_inv_q(fps), this->i_video_stream->time_base);
+
+        outPacket->pts = frame_duration * (this->frames - 1);
+        outPacket->dts = frame_duration * (this->frames - 1);
+    }
+    else
+    {
+        outPacket->pts = av_rescale_q_rnd(packet->pts - first_pts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+        outPacket->dts = av_rescale_q_rnd(packet->dts - first_dts, this->i_video_stream->time_base, this->o_video_stream->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    }
+    
+    outPacket->duration = av_rescale_q(packet->duration, this->i_video_stream->time_base, this->o_video_stream->time_base);
     outPacket->pos = -1;
     //av_interleaved_write_frame(o_fmt_ctx, outPacket);
     av_write_frame(o_fmt_ctx, outPacket);
@@ -252,7 +297,7 @@ void Record::writePacket(AVPacket *packet, DetectedMovements *movements)
     unsigned long nMovements = movements ? movements->size() : 0;
     this->data << nMovements << endl;
 
-    for (int i = 0; i < nMovements; i++)
+    for (unsigned long i = 0; i < nMovements; i++)
     {
         unsigned long nPoints = (*movements)[i].contour.size();
 
@@ -308,7 +353,7 @@ bool MotionRecordReader::readNext(FrameQueueItem *&item, DetectedMovements *&mov
 
                 movementsDst = new DetectedMovements(nMovements);
 
-                for (int i = 0; i < nMovements; i++)
+                for (unsigned long i = 0; i < nMovements; i++)
                 {
                     unsigned long nPoints;
                     this->fMovements >> nPoints;

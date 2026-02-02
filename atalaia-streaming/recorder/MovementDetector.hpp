@@ -35,6 +35,11 @@ class MovementDetector
         MovementDetector();
         virtual ~MovementDetector();
         DetectedMovements detectMovement(const Mat& frame);
+        inline void reset()
+        {
+            this->bgsubtractor->clear();
+            this->update_bg_model = true;
+        }
 
     private:
         Ptr<BackgroundSubtractor> bgsubtractor;

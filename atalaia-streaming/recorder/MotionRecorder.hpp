@@ -12,8 +12,14 @@ using namespace std;
 class MotionRecorder
 {
     public:
-        MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds = 10);
+        MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds = 10, bool notifyThis = false);
         ~MotionRecorder();
+
+        /**
+         * Force notify this record.
+         */
+        bool notifyThis = false;
+        bool passive = false;
 
     private:
         VideoStream *stream;
@@ -24,7 +30,6 @@ class MotionRecorder
         static void threadProcess(MotionRecorder *recorder);
         std::string newFileName();
         Notifier *notifier;
-
 };
 
 class Record

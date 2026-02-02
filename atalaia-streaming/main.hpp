@@ -9,4 +9,5 @@
 #undef SHOW_FPS
 #undef VERBOSE
 #define MOVEMENT_PERIOD_WATCH 3.0
+
 extern bool terminating;

@@ -34,6 +34,10 @@ public:
 #ifdef VERBOSE
             std::cout << "Queue is closed." << std::endl;
 #endif
+
+            if (!closed)
+                this->_condition.notify_all();
+
             return false;
         }
         else
@@ -98,6 +102,15 @@ public:
     void waitShutdown()
     {
         std::unique_lock<std::mutex> lock(this->_mutex);
+        
+        if ((closed && this->_queue.empty()) || terminating)
+            return;
+
         this->_condition.wait(lock, [=] { return (closed && this->_queue.empty()) || terminating; });
+    }
+
+    bool isClosed()
+    {
+        return this->closed;
     }
 };

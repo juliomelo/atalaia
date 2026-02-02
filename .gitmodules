@@ -1,0 +1,3 @@
+[submodule "alarme-intelbras/alarme-intelbras"]
+	path = alarme-intelbras/alarme-intelbras
+	url = https://github.com/elvis-epx/alarme-intelbras.git

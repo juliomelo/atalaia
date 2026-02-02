@@ -1,6 +1,7 @@
 ﻿#include "main.hpp"
 #include "notify/amqp/AMQPNotifier.hpp"
 #include "notify/LocalNotifier.hpp"
+#include "notify/StdOutNotifier.hpp"
 #include "recorder/MotionRecorder.hpp"
 #include "recorder/ObjectRecorder.hpp"
 #include "recorder/VideoStream.hpp"
@@ -21,6 +22,51 @@ typedef struct
 	int (* const function)(int, char **);
 } t_commands;
 
+int singleRecord(const char *url)
+{
+	VideoStreamQueue queue;
+	VideoStream stream;
+	
+	stream.start(url, &queue);
+
+	StdOutNotifier notifier(&stream, true);
+	MotionRecorder recorder(&stream, &notifier, 10, true);
+
+	queue.waitShutdown();
+
+	return notifier.done ? 0 : -1;
+}
+
+int passiveRecord(const char *url)
+{
+	VideoStreamQueue queue;
+	VideoStream stream;
+	
+	stream.start(url, &queue);
+
+	StdOutNotifier notifier(&stream, false);
+	MotionRecorder recorder(&stream, &notifier, 10, false);
+	recorder.passive = true;
+
+	// Read from stdin and set recorder->notifyThis = true when stdin receives a 'movement' command.
+	std::thread stdin_thread([&recorder]() {
+		std::string line;
+		while (!terminating && std::getline(std::cin, line)) {
+			if (line == "movement") {
+#ifdef VERBOSE
+				std::cout << "Received 'movement' command from stdin." << std::endl;
+#endif
+				recorder.notifyThis = true;
+			}
+		}
+	});
+
+	queue.waitShutdown();
+	terminating = true;
+
+	return notifier.done ? 0 : -1;
+}
+
 int monitorMovements(int argc, char **argv)
 {
 	if (argc < 2)
@@ -28,13 +74,16 @@ int monitorMovements(int argc, char **argv)
 		cerr << "Syntax: atalaia-streaming movements <amqp url> <video url> [...video url]" << endl;
 		cerr << "        atalaia-streaming movements <amqp url> -f <urls file>" << endl;
 		cerr << "        atalaia-streaming movements <ampq url> -e <environment variable>" << endl;
+		cerr << endl;
+		cerr << "Single-file monitoring:" << endl;
+		cerr << "        atalaia-streaming movements <amqp url> -s <video url>" << endl;
+		cerr << endl;
+		cerr << "Passive monitoring:" << endl;
+		cerr << "        atalaia-streaming movements <amqp url> -p <video url>" << endl;
 		return -1;
 	}
 
-	AMQPNotifier notifier(argv[0]);
 	list<VideoStream *> streams;
-
-	notifier.getHandler()->read();
 
 	if (argc == 3 && strcmp(argv[1], "-f") == 0)
 	{
@@ -67,6 +116,20 @@ int monitorMovements(int argc, char **argv)
 			stream->start(url, new VideoStreamQueue());
 		}
 	}
+	else if (argc == 3 && strcmp(argv[1], "-s") == 0)
+	{
+#ifdef VERBOSE
+		cout << "Monitoring single stream" << endl;
+#endif
+		return singleRecord(argv[2]);
+	}
+	else if (argc == 3 && strcmp(argv[1], "-p") == 0)
+	{
+#ifdef VERBOSE
+		cout << "Monitoring passive stream" << endl;
+#endif
+		return passiveRecord(argv[2]);
+	}
 	else if (argc >= 2)
 		for (int i = 1; i < argc; i++)
 		{
@@ -78,6 +141,9 @@ int monitorMovements(int argc, char **argv)
 #ifdef VERBOSE
 	cout << "Monitoring " << streams.size() << " video streams" << endl;
 #endif
+
+	AMQPNotifier notifier(argv[0]);
+	notifier.getHandler()->read();
 
 	list<MotionRecorder *> recorders;
 

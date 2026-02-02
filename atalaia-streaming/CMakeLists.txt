@@ -5,9 +5,6 @@ cmake_minimum_required (VERSION 3.8)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Adicione a origem ao executável deste projeto.
-#add_executable (atalaia-Streaming "Atalaia-Streaming.cpp" "Atalaia-Streaming.h")
-
 set(CMAKE_WARN_DEPRECATED FALSE)
 add_compile_options(-Wno-deprecated-declarations)
 
@@ -23,10 +20,10 @@ add_executable(atalaia-streaming
     recorder/ObjectRecorder.cpp recorder/ObjectRecorder.hpp
     notify/Listener.hpp notify/Listener.cpp
     notify/Notify.hpp notify/LocalNotifier.hpp notify/LocalNotifier.cpp
+    notify/StdOutNotifier.hpp notify/StdOutNotifier.cpp
     notify/amqp/AtalaiaTcpHandler.hpp notify/amqp/AtalaiaTcpHandler.cpp
     notify/amqp/AMQPNotifier.hpp notify/amqp/AMQPNotifier.cpp
 )
-
 
 find_library(AVCODEC_LIBRARY avcodec)
 find_library(AVFORMAT_LIBRARY avformat)
@@ -65,6 +62,23 @@ find_library(SWSCALE_LIBRARY swscale)
 set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -ldl")
 
 add_dependencies(atalaia-streaming ${DEPENDENCIES})
+
+# Flags por target, aplicadas somente em Debug
+target_compile_options(atalaia-streaming PRIVATE
+  $<$<CONFIG:Debug>:-g -Og -fno-omit-frame-pointer -Wall>
+  $<$<CONFIG:RelWithDebInfo>:-g -O2 -fno-omit-frame-pointer>
+)
+
+# Linker: rdynamic para expor símbolos em backtrace
+target_link_options(atalaia-streaming PRIVATE
+  $<$<CONFIG:Debug>:-rdynamic>
+)
+
+# Se quiser definir macros apenas em Debug
+target_compile_definitions(atalaia-streaming PRIVATE
+  $<$<CONFIG:Debug>:DEBUG_BUILD>
+)
+
 
 target_include_directories(atalaia-streaming PRIVATE ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR} ${OPENCV_INCLUDE_DIR} ${AMQPCPP_INCLUDE_DIR})
 target_link_libraries(atalaia-streaming PRIVATE stdc++fs ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} ${OpenCV_LIBS} ${SWSCALE_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${LIBS})

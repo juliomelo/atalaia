@@ -41,6 +41,7 @@ int VideoStream::start(std::string url, BlockingQueue<FrameQueueItem *> *queue)
 
 void VideoStream::threadProcess(VideoStream *data)
 {
+#ifdef VERBOSE
     cout << "Connecting to " << data->url << "...\n";
 #endif
 
@@ -192,8 +193,13 @@ void VideoStream::threadProcess(VideoStream *data)
                     // }
 
                     if (!data->queue->try_push(item)) {
-                        cout << "Can't push item to queue!\n";
-                        delete item;
+                        if (data->queue->isClosed())
+                            break;
+                        else
+                        {
+                            cout << "Can't push item to queue!\n";
+                            delete item;
+                        }
                     }
                 }
             }
@@ -233,6 +239,7 @@ void VideoStream::threadProcess(VideoStream *data)
     cout << "Stopping " << data->url << "...\n";
 #endif
 
+    av_packet_unref(&packet);
     av_frame_free(&frame);
     av_frame_free(&decframe);
 
@@ -240,13 +247,8 @@ void VideoStream::threadProcess(VideoStream *data)
     //av_free(data->format_ctx);
     sws_freeContext(swsctx);
 
-
     data->threadState = SHUTDOWN;
-    data->thread = NULL;
-
     data->queue->close();
-    data->queue->waitShutdown();
-
 
     if (data->format_ctx)
     {
@@ -271,5 +273,6 @@ VideoStream::~VideoStream()
 
 FrameQueueItem::~FrameQueueItem()
 {
-    av_packet_unref(this->packet);
+    if (this->packet)
+        av_packet_unref(this->packet);
 }

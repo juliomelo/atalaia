@@ -139,7 +139,7 @@ void trackObjects(vector<DetectedObject> newObjects, vector<DetectedObject> &las
         tracker = new MultiTracker();
         tracker->update(mat);
 
-        for (int i = 0; i < lastObjects.size(); i++)
+        for (size_t i = 0; i < lastObjects.size(); i++)
             tracker->add(TRACKER_TYPE::create(), mat, lastObjects[i].box);
     }
 #endif
@@ -273,7 +273,7 @@ void ObjectRecorder::process(string file)
                     trackObjects(newObjects, knownObjects, frame->mat);
 #endif
             
-                    for (int i = 0; i < knownObjects.size(); i++) {
+                    for (size_t i = 0; i < knownObjects.size(); i++) {
                         DetectedObject *obj = &knownObjects[i];
 
                         if (obj->id == 0)
