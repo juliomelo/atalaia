@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <csignal>
+
 #define REMOVE_FILES
 #define KEEP_PACKAGES_AFTER_KEYFRAME
 #undef SHOW_MOVEMENT_DETECTION
@@ -10,4 +12,4 @@
 #undef VERBOSE
 #define MOVEMENT_PERIOD_WATCH 3.0
 
-extern bool terminating;
+extern volatile sig_atomic_t terminating;

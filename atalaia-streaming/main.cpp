@@ -240,12 +240,12 @@ int monitorObjects(int argc, char **argv)
 	return 0;
 }
 
-bool terminating = false;
+volatile sig_atomic_t terminating = 0;
 
 void terminate(int signum)
 {
-	cout << "Received SIGTERM" << endl;
-	terminating = true;
+	(void)signum;
+	terminating = 1;
 }
 
 int main(int argc, char **argv)
@@ -266,7 +266,9 @@ int main(int argc, char **argv)
 	sigActionData.sa_handler = terminate;
 
 	sigaction(SIGTERM, &sigActionData, NULL);
+	sigaction(SIGINT, &sigActionData, NULL);
 	sigaction(SIGQUIT, &sigActionData, NULL);
+	sigaction(SIGHUP, &sigActionData, NULL);
 
 	//av_log_set_level( AV_LOG_DEBUG );
 	av_register_all();

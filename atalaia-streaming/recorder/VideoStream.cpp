@@ -1,4 +1,5 @@
 #include "VideoStream.hpp"
+#include "../main.hpp"
 #include "MovementDetector.hpp"
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,12 @@ long long current_timestamp()
 	long long milliseconds = te.tv_sec * 1000LL + te.tv_usec / 1000; // calculate milliseconds
 	// printf("milliseconds: %lld\n", milliseconds);
 	return milliseconds;
+}
+
+static int ffmpegInterruptCallback(void *opaque)
+{
+    (void)opaque;
+    return terminating ? 1 : 0;
 }
 
 VideoStream::VideoStream()
@@ -50,6 +57,13 @@ void VideoStream::threadProcess(VideoStream *data)
 
     if (!strncmp(data->url.c_str(), "rtsp://", 7))
         av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+
+    data->format_ctx = avformat_alloc_context();
+    if (data->format_ctx)
+    {
+        data->format_ctx->interrupt_callback.callback = ffmpegInterruptCallback;
+        data->format_ctx->interrupt_callback.opaque = NULL;
+    }
 
     if (avformat_open_input(&data->format_ctx, data->url.c_str(), NULL, &opts) != 0)
     {
