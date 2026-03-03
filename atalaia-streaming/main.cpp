@@ -69,17 +69,17 @@ int passiveRecord(const char *url)
 
 int monitorMovements(int argc, char **argv)
 {
-	if (argc < 2)
+	if (argc < 2 || (argc == 2 && (strcmp(argv[1], "-s") || strcmp(argv[1], "-p"))))
 	{
 		cerr << "Syntax: atalaia-streaming movements <amqp url> <video url> [...video url]" << endl;
 		cerr << "        atalaia-streaming movements <amqp url> -f <urls file>" << endl;
 		cerr << "        atalaia-streaming movements <ampq url> -e <environment variable>" << endl;
 		cerr << endl;
 		cerr << "Single-file monitoring:" << endl;
-		cerr << "        atalaia-streaming movements <amqp url> -s <video url>" << endl;
+		cerr << "        atalaia-streaming movements -s <video url>" << endl;
 		cerr << endl;
 		cerr << "Passive monitoring:" << endl;
-		cerr << "        atalaia-streaming movements <amqp url> -p <video url>" << endl;
+		cerr << "        atalaia-streaming movements -p <video url>" << endl;
 		return -1;
 	}
 
@@ -116,19 +116,19 @@ int monitorMovements(int argc, char **argv)
 			stream->start(url, new VideoStreamQueue());
 		}
 	}
-	else if (argc == 3 && strcmp(argv[1], "-s") == 0)
+	else if (argc == 2 && strcmp(argv[0], "-s") == 0)
 	{
 #ifdef VERBOSE
 		cout << "Monitoring single stream" << endl;
 #endif
-		return singleRecord(argv[2]);
+		return singleRecord(argv[1]);
 	}
-	else if (argc == 3 && strcmp(argv[1], "-p") == 0)
+	else if (argc == 2 && strcmp(argv[0], "-p") == 0)
 	{
 #ifdef VERBOSE
 		cout << "Monitoring passive stream" << endl;
 #endif
-		return passiveRecord(argv[2]);
+		return passiveRecord(argv[1]);
 	}
 	else if (argc >= 2)
 		for (int i = 1; i < argc; i++)
