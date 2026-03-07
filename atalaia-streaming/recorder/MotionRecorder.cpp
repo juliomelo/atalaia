@@ -2,6 +2,7 @@
 #include "MovementDetector.hpp"
 #include <list>
 #include <iostream>
+#include <cstdio>
 #include <opencv2/highgui.hpp>
 #include "../main.hpp"
 
@@ -9,13 +10,14 @@ using namespace std;
 
 int Record::sequence = 0;
 
-MotionRecorder::MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds, bool notifyThis)
+MotionRecorder::MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds, bool notifyThis, int postStopSeconds)
 {
     shutdown = false;
     this->stream = stream;
     this->notifier = notifier;
     this->maxSeconds = maxSeconds;
     this->notifyThis = notifyThis;
+    this->postStopSeconds = postStopSeconds;
     thread = new std::thread(threadProcess, this);
 }
 
@@ -24,6 +26,71 @@ MotionRecorder::~MotionRecorder()
     shutdown = true;
     this->thread->join();
     delete this->thread;
+}
+
+void MotionRecorder::setPassive(bool passive)
+{
+    std::lock_guard<std::mutex> lock(this->eventMutex);
+    this->passive = passive;
+}
+
+void MotionRecorder::notify(TriggerKind kind, TriggerAction action)
+{
+    std::lock_guard<std::mutex> lock(this->eventMutex);
+
+    bool *state = (kind == TriggerKind::MOVEMENT)
+        ? &this->movementActive
+        : &this->personActive;
+
+    switch (action)
+    {
+        case TriggerAction::START:
+            *state = true;
+            this->stopRequested = false;
+            this->notifyThis = true;
+            break;
+
+        case TriggerAction::STOP:
+            *state = false;
+            if (!this->movementActive && !this->personActive)
+                this->stopRequested = true;
+            break;
+
+        case TriggerAction::PULSE:
+        default:
+            this->notifyThis = true;
+            this->stopRequested = false;
+            this->pulseRequested = true;
+            break;
+    }
+}
+
+bool MotionRecorder::hasActiveStartEvents()
+{
+    std::lock_guard<std::mutex> lock(this->eventMutex);
+    return this->movementActive || this->personActive;
+}
+
+bool MotionRecorder::consumeStopRequested()
+{
+    std::lock_guard<std::mutex> lock(this->eventMutex);
+    bool current = this->stopRequested;
+    this->stopRequested = false;
+    return current;
+}
+
+bool MotionRecorder::consumePulseRequested()
+{
+    std::lock_guard<std::mutex> lock(this->eventMutex);
+    bool current = this->pulseRequested;
+    this->pulseRequested = false;
+    return current;
+}
+
+void MotionRecorder::clearStopRequested()
+{
+    std::lock_guard<std::mutex> lock(this->eventMutex);
+    this->stopRequested = false;
 }
 
 void MotionRecorder::threadProcess(MotionRecorder *recorder)
@@ -37,9 +104,71 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
     int64_t nextDetection = 0;
     int64_t videoTimeThreshold = 0;
     std::list<AVPacket *> waitingMovement;
+    std::list<AVPacket *> postStopPackets;
+    bool externalStartMode = false;
+    bool waitingRestart = false;
+    int64_t waitRestartUntil = 0;
 #ifdef SHOW_MOVEMENT_DETECTION
     uint frames = 0;
 #endif
+
+    auto flushToRecord = [&record](std::list<AVPacket *> &packets) {
+        for (list<AVPacket *>::iterator it = packets.begin(); it != packets.end(); it = packets.erase(it))
+        {
+            record->writePacket(*it);
+            av_packet_unref(*it);
+        }
+    };
+
+    auto releasePackets = [](std::list<AVPacket *> &packets) {
+        for (list<AVPacket *>::iterator it = packets.begin(); it != packets.end(); it = packets.erase(it))
+            av_packet_unref(*it);
+    };
+
+    auto finalizeRecord = [&](bool notify, bool resetNotifyThis) {
+        if (!record)
+            return;
+
+        string filename = record->getFileName();
+        int64_t duration = record->getDuration();
+        bool keep = duration > 1;
+
+        delete record;
+        record = NULL;
+
+        releasePackets(waitingMovement);
+        releasePackets(postStopPackets);
+
+        if (notify && recorder->notifier && keep)
+        {
+#ifdef VERBOSE
+            cout << "Notifying movement " << filename << " - duration: " << duration << endl;
+#endif
+            recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
+            movementDetector.reset();
+        }
+        else
+        {
+#ifdef VERBOSE
+            cout << "Discarding " << filename << " - duration: " << duration << endl;
+#endif
+
+            string mp4 = filename + ".mp4";
+            string movementsFilename = filename + ".movements";
+
+#ifdef REMOVE_FILES
+            remove(mp4.c_str());
+            remove(movementsFilename.c_str());
+#endif
+        }
+
+        if (resetNotifyThis)
+            recorder->notifyThis = false;
+
+        externalStartMode = false;
+        waitingRestart = false;
+        waitRestartUntil = 0;
+    };
 
     do
     {
@@ -61,8 +190,102 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
 #endif
         }
 
-        if (!record && recorder->passive && !recorder->notifyThis)
+        bool hasActiveStart = recorder->hasActiveStartEvents();
+        bool stopRequested = recorder->consumeStopRequested();
+        bool pulseRequested = recorder->consumePulseRequested();
+
+        if (!record && recorder->passive && !recorder->notifyThis && !hasActiveStart)
         {
+            delete item;
+            continue;
+        }
+
+        if (record && item->packet->pts >= videoTimeThreshold)
+        {
+            finalizeRecord(true, true);
+        }
+
+        if (record && externalStartMode)
+        {
+            if (pulseRequested)
+            {
+                waitingRestart = true;
+                waitRestartUntil = item->packet->pts + recorder->postStopSeconds / (item->time_base.num / (float)item->time_base.den);
+            }
+
+            if (stopRequested && !hasActiveStart)
+            {
+                waitingRestart = true;
+                waitRestartUntil = item->packet->pts + recorder->postStopSeconds / (item->time_base.num / (float)item->time_base.den);
+            }
+
+            if (waitingRestart)
+            {
+                if (hasActiveStart || recorder->notifyThis)
+                {
+                    flushToRecord(postStopPackets);
+                    waitingRestart = false;
+                    recorder->clearStopRequested();
+                }
+                else if (item->packet->pts < waitRestartUntil)
+                {
+                    postStopPackets.push_back(av_packet_clone(item->packet));
+                    delete item;
+                    continue;
+                }
+                else
+                {
+                    finalizeRecord(true, true);
+                    delete item;
+                    continue;
+                }
+            }
+
+            if (record)
+            {
+                record->writePacket(item->packet);
+                delete item;
+                continue;
+            }
+        }
+
+        if (!record && hasActiveStart)
+        {
+            videoTimeThreshold = item->packet->pts + recorder->maxSeconds / (item->time_base.num / (float)item->time_base.den);
+            record = new Record(recorder->stream->getAVStream());
+            externalStartMode = true;
+            waitingRestart = false;
+
+#ifdef KEEP_PACKAGES_AFTER_KEYFRAME
+            for (list<AVPacket *>::iterator it = packetsFromKeyFrame.begin(); it != packetsFromKeyFrame.end(); ++it)
+                record->writePacket(*it);
+#endif
+
+            if (!postStopPackets.empty())
+                flushToRecord(postStopPackets);
+
+            record->writePacket(item->packet);
+            delete item;
+            continue;
+        }
+
+        if (!record && pulseRequested)
+        {
+            videoTimeThreshold = item->packet->pts + recorder->maxSeconds / (item->time_base.num / (float)item->time_base.den);
+            record = new Record(recorder->stream->getAVStream());
+            externalStartMode = true;
+            waitingRestart = true;
+            waitRestartUntil = item->packet->pts + recorder->postStopSeconds / (item->time_base.num / (float)item->time_base.den);
+
+#ifdef KEEP_PACKAGES_AFTER_KEYFRAME
+            for (list<AVPacket *>::iterator it = packetsFromKeyFrame.begin(); it != packetsFromKeyFrame.end(); ++it)
+                record->writePacket(*it);
+#endif
+
+            if (!postStopPackets.empty())
+                flushToRecord(postStopPackets);
+
+            record->writePacket(item->packet);
             delete item;
             continue;
         }
@@ -131,39 +354,7 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
             && (recorder->notifyThis == false || record->getDuration() >= 1)
         )
         {
-            string filename = record->getFileName();
-            int64_t duration = record->getDuration();
-            bool keep = duration > 1;
-
-            delete record;
-            record = NULL;
-
-            for (list<AVPacket *>::iterator it = waitingMovement.begin(); it != waitingMovement.end(); it = waitingMovement.erase(it))
-                av_packet_unref(*it);
-
-            if (recorder->notifier && keep)
-            {
-#ifdef VERBOSE
-                cout << "Notifying movement " << filename << " - duration: " << duration << endl;
-#endif
-                recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
-                recorder->notifyThis = false;
-                movementDetector.reset();
-            }
-            else
-            {
-#ifdef VERBOSE
-                cout << "Discarding " << filename << " - duration: " << duration << endl;
-#endif
-
-                string mp4 = filename + ".mp4";
-                string movementsFilename = filename + ".movements";
-
-#ifdef REMOVE_FILES
-                remove(mp4.c_str());
-                remove(movementsFilename.c_str());
-#endif
-            }
+            finalizeRecord(true, true);
         }
         else if (record && recorder->notifyThis && record->getDuration() < 1)
             record->writePacket(item->packet);
@@ -179,8 +370,15 @@ void MotionRecorder::threadProcess(MotionRecorder *recorder)
     if (record)
     {
         string filename = record->getFileName();
+        int64_t duration = record->getDuration();
+        bool keep = duration > 1;
+
         delete record;
-        if (recorder->notifier)
+
+        releasePackets(waitingMovement);
+        releasePackets(postStopPackets);
+
+        if (recorder->notifier && keep)
             recorder->notifier->notify(filename, NotifyEvent::MOVEMENT);
     }
 }

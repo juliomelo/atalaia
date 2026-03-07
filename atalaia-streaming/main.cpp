@@ -9,8 +9,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <algorithm>
+#include <cctype>
 #include <libavformat/avio.h>
 #include <signal.h>
+#include <sstream>
 #include <thread>
 
 using namespace cv;
@@ -22,7 +25,62 @@ typedef struct
 	int (* const function)(int, char **);
 } t_commands;
 
-int singleRecord(const char *url)
+static std::string trim(const std::string &value)
+{
+	const auto begin = value.find_first_not_of(" \t\r\n");
+	if (begin == std::string::npos)
+		return "";
+
+	const auto end = value.find_last_not_of(" \t\r\n");
+	return value.substr(begin, end - begin + 1);
+}
+
+static bool parseStdinEvent(const std::string &line, TriggerKind &kind, TriggerAction &action)
+{
+	std::string text = trim(line);
+
+	if (text.empty())
+		return false;
+
+	if (text == "movement")
+	{
+		kind = TriggerKind::MOVEMENT;
+		action = TriggerAction::PULSE;
+		return true;
+	}
+
+	for (char &c : text)
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+	std::replace(text.begin(), text.end(), '.', ' ');
+
+	std::istringstream stream(text);
+	std::string kindToken;
+	std::string actionToken;
+
+	stream >> kindToken;
+	stream >> actionToken;
+
+	if (kindToken == "movement")
+		kind = TriggerKind::MOVEMENT;
+	else if (kindToken == "person")
+		kind = TriggerKind::PERSON;
+	else
+		return false;
+
+	if (actionToken.empty() || actionToken == "pulse")
+		action = TriggerAction::PULSE;
+	else if (actionToken == "start")
+		action = TriggerAction::START;
+	else if (actionToken == "stop")
+		action = TriggerAction::STOP;
+	else
+		return false;
+
+	return true;
+}
+
+int singleRecord(const char *url, int maxSeconds = 10, int postStopSeconds = 5)
 {
 	VideoStreamQueue queue;
 	VideoStream stream;
@@ -30,14 +88,32 @@ int singleRecord(const char *url)
 	stream.start(url, &queue);
 
 	StdOutNotifier notifier(&stream, true);
-	MotionRecorder recorder(&stream, &notifier, 10, true);
+	MotionRecorder recorder(&stream, &notifier, maxSeconds, false, postStopSeconds);
+	recorder.setPassive(true);
+
+	std::thread stdin_thread([&recorder]() {
+		std::string line;
+
+		while (!terminating && std::getline(std::cin, line))
+		{
+			TriggerKind kind;
+			TriggerAction action;
+
+			if (parseStdinEvent(line, kind, action))
+				recorder.notify(kind, action);
+		}
+	});
 
 	queue.waitShutdown();
+	terminating = true;
+
+	if (stdin_thread.joinable())
+		stdin_thread.join();
 
 	return notifier.done ? 0 : -1;
 }
 
-int passiveRecord(const char *url)
+int passiveRecord(const char *url, int maxSeconds = 10, int postStopSeconds = 5)
 {
 	VideoStreamQueue queue;
 	VideoStream stream;
@@ -45,41 +121,70 @@ int passiveRecord(const char *url)
 	stream.start(url, &queue);
 
 	StdOutNotifier notifier(&stream, false);
-	MotionRecorder recorder(&stream, &notifier, 10, false);
-	recorder.passive = true;
+	MotionRecorder recorder(&stream, &notifier, maxSeconds, false, postStopSeconds);
+	recorder.setPassive(true);
 
-	// Read from stdin and set recorder->notifyThis = true when stdin receives a 'movement' command.
 	std::thread stdin_thread([&recorder]() {
 		std::string line;
-		while (!terminating && std::getline(std::cin, line)) {
-			if (line == "movement") {
-#ifdef VERBOSE
-				std::cout << "Received 'movement' command from stdin." << std::endl;
-#endif
-				recorder.notifyThis = true;
-			}
+		while (!terminating && std::getline(std::cin, line))
+		{
+			TriggerKind kind;
+			TriggerAction action;
+
+			if (parseStdinEvent(line, kind, action))
+				recorder.notify(kind, action);
 		}
 	});
 
 	queue.waitShutdown();
 	terminating = true;
 
+	if (stdin_thread.joinable())
+		stdin_thread.join();
+
 	return notifier.done ? 0 : -1;
 }
 
 int monitorMovements(int argc, char **argv)
 {
-	if (argc < 2 || (argc == 2 && (strcmp(argv[1], "-s") || strcmp(argv[1], "-p"))))
+	int maxSeconds = 10;
+	int postStopSeconds = 5;
+
+	for (int i = argc - 2; i >= 0; --i)
+	{
+		if (strcmp(argv[i], "--max-seconds") == 0 && i + 1 < argc)
+		{
+			maxSeconds = std::max(1, atoi(argv[i + 1]));
+			for (int j = i; j + 2 < argc; ++j)
+				argv[j] = argv[j + 2];
+			argc -= 2;
+		}
+		else if (strcmp(argv[i], "--post-stop-seconds") == 0 && i + 1 < argc)
+		{
+			postStopSeconds = std::max(1, atoi(argv[i + 1]));
+			for (int j = i; j + 2 < argc; ++j)
+				argv[j] = argv[j + 2];
+			argc -= 2;
+		}
+	}
+
+	bool isSingleMode = argc == 2 && strcmp(argv[0], "-s") == 0;
+	bool isPassiveMode = argc == 2 && strcmp(argv[0], "-p") == 0;
+	bool isFileMode = argc == 3 && strcmp(argv[1], "-f") == 0;
+	bool isEnvMode = argc == 3 && strcmp(argv[1], "-e") == 0;
+	bool isAmqpMode = argc >= 2 && !isSingleMode && !isPassiveMode && !isFileMode && !isEnvMode;
+
+	if (!(isSingleMode || isPassiveMode || isFileMode || isEnvMode || isAmqpMode))
 	{
 		cerr << "Syntax: atalaia-streaming movements <amqp url> <video url> [...video url]" << endl;
 		cerr << "        atalaia-streaming movements <amqp url> -f <urls file>" << endl;
 		cerr << "        atalaia-streaming movements <ampq url> -e <environment variable>" << endl;
 		cerr << endl;
 		cerr << "Single-file monitoring:" << endl;
-		cerr << "        atalaia-streaming movements -s <video url>" << endl;
+		cerr << "        atalaia-streaming movements -s <video url> [--max-seconds N] [--post-stop-seconds N]" << endl;
 		cerr << endl;
 		cerr << "Passive monitoring:" << endl;
-		cerr << "        atalaia-streaming movements -p <video url>" << endl;
+		cerr << "        atalaia-streaming movements -p <video url> [--max-seconds N] [--post-stop-seconds N]" << endl;
 		return -1;
 	}
 
@@ -121,14 +226,14 @@ int monitorMovements(int argc, char **argv)
 #ifdef VERBOSE
 		cout << "Monitoring single stream" << endl;
 #endif
-		return singleRecord(argv[1]);
+		return singleRecord(argv[1], maxSeconds, postStopSeconds);
 	}
 	else if (argc == 2 && strcmp(argv[0], "-p") == 0)
 	{
 #ifdef VERBOSE
 		cout << "Monitoring passive stream" << endl;
 #endif
-		return passiveRecord(argv[1]);
+		return passiveRecord(argv[1], maxSeconds, postStopSeconds);
 	}
 	else if (argc >= 2)
 		for (int i = 1; i < argc; i++)

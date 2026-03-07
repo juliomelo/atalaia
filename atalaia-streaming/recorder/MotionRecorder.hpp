@@ -6,14 +6,30 @@
 #include "MovementDetector.hpp"
 #include "../notify/Notify.hpp"
 #include <fstream>
+#include <mutex>
 
 using namespace std;
+
+enum class TriggerKind
+{
+    MOVEMENT,
+    PERSON
+};
+
+enum class TriggerAction
+{
+    PULSE,
+    START,
+    STOP
+};
 
 class MotionRecorder
 {
     public:
-        MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds = 10, bool notifyThis = false);
+        MotionRecorder(VideoStream *stream, Notifier *notifier, int maxSeconds = 10, bool notifyThis = false, int postStopSeconds = 5);
         ~MotionRecorder();
+        void notify(TriggerKind kind, TriggerAction action);
+        void setPassive(bool passive);
 
         /**
          * Force notify this record.
@@ -26,6 +42,17 @@ class MotionRecorder
         std::thread *thread;
         bool shutdown;
         int maxSeconds;
+        int postStopSeconds;
+        bool movementActive = false;
+        bool personActive = false;
+        bool stopRequested = false;
+        bool pulseRequested = false;
+        std::mutex eventMutex;
+
+        bool hasActiveStartEvents();
+        bool consumeStopRequested();
+        bool consumePulseRequested();
+        void clearStopRequested();
 
         static void threadProcess(MotionRecorder *recorder);
         std::string newFileName();
