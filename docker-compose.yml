@@ -71,12 +71,12 @@ services:
             retries: 5
             start_period: 5s
 
-    telegram:
+    telegram-person:
         image: brjuliomelo/telegram-reporter
         build:
             context: telegram-reporter
         volumes:
-            - recording:/data/local
+            - ./data:/data/local
         restart: unless-stopped
         depends_on:
             rabbitmq:
@@ -87,8 +87,46 @@ services:
         # networks:
         #     - atalaia-services
 
-volumes:
-    recording:
+    telegram-manual:
+        image: brjuliomelo/telegram-reporter
+        build:
+            context: telegram-reporter
+        volumes:
+            - ./data:/data/local
+        restart: unless-stopped
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+                restart: true
+        env_file:
+            - ./video_urls.env
+        environment:
+            ROUTE: manual
+
+    dahua:
+        build:
+            target: dahua-monitor
+        image: brjuliomelo/atalaia-dahua-monitor
+        volumes:
+            - ./dahua-monitor:/home/node/app
+            - /tmp/.X11-unix:/tmp/.X11-unix
+            - ./data:/data/local
+        command: ["/home/node/app"]
+        env_file:
+            - ./video_urls.env
+        environment:
+            DISPLAY: :0
+            PERSON_NOTIFY: movement
+            MQTT_URL: mqtt://mosquitto:1883
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+                restart: true
+        cap_add:
+            - SYS_PTRACE
+        security_opt:
+            - seccomp:unconfined
+        restart: unless-stopped
 
 # networks:
 #     atalaia-services:

@@ -127,3 +127,30 @@ COPY --from=build /usr/src/atalaia/build/atalaia-streaming/atalaia-streaming /us
 WORKDIR /
 
 ENTRYPOINT ["node"]
+
+FROM nodebase AS dahua-monitor-build
+
+WORKDIR /app
+
+COPY dahua-monitor/package.json ./
+RUN npm install
+
+COPY dahua-monitor/tsconfig.json ./
+COPY dahua-monitor/src ./src
+
+RUN npx tsc
+
+FROM node AS dahua-monitor
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+RUN apt update && apt install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
+COPY dahua-monitor/package.json ./
+RUN npm install --omit=dev
+
+COPY --from=dahua-monitor-build /app/dist ./dist
+
+ENTRYPOINT ["node", "dist/index.js"]
+CMD []
